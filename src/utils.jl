@@ -3,7 +3,7 @@ function logsum(x::AbstractArray)
     if length(x) == 1
         return x[1]
     else
-        a = max(x)
+        a = maximum(x)
         return a + log(sum_kbn(exp(x-a)))
     end
 end
@@ -12,7 +12,7 @@ function logsum(x::AbstractArray, w::AbstractArray)
     if length(x) == 1 && w[1] == 1.0
         return x[1]
     else
-        a = max(x)
+        a = maximum(x)
         return a + log(sum_kbn(w.*exp(x-a)))
     end
 end

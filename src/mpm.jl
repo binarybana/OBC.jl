@@ -5,6 +5,10 @@ using Distributions
 using OBC
 import OBC: propose, energy, reject, logsum
 
+export MPMPrior, MPMParams, MPMPropMoves, MPMCls, calc_g, gen_points, 
+    gen_posterior_points, calc_pvals, error_points, predict, error_moments_cube
+    var_error_hists, e_error_hists, e_error_eff
+
 ######################################################################
 ######################################################################
 ######################################################################
@@ -292,6 +296,78 @@ function calc_pvals(Ts, points, db, d=10.0)
     return pvals, tru_ts, tvals
 end
 
+function e_error_eff(g0, g1)
+    # Calculate expectation of error given the two effective class conditional
+    # densities (posterior predictive densities)
+    exp(logsum(max(g0,g1)))
+end
+
+function e_error_hists(points, db1, db2, numlam; dmean=10.0)
+    # using a fixed set of points, evaluate the first moment of the error
+    #
+end
+
+function var_error_hists(points, db1, db2, numlam; dmean=10.0)
+    # Get second error of moment using histories and fixed points
+end
+
+function error_moments_cube(db1, db2, numlam; dmean=10.0)
+    # Get both moments using histories and adaptive integration by
+    # calling Cubature.hquadrature_v with a function that evaluates the error,
+    # and error^2 for mutiple points at a time
+
+    assert(length(db1) == length(db2))
+    warn("This is assuming c=0.5")
+
+    #function error_moments(points, vals)
+        ##points: dxn array to evaluate at
+        ##vals: 2xn values to store into
+        #numpts = size(points, 2)
+        #res = zeros(numpts, 2)
+        #for class = 1:2
+            #curr = [db1, db2][class]
+            #for i in 1:length(db1)
+                #assert(curr.k==1)
+                #lams = rand(MultivariateNormal(curr1.mu[:,1], curr.sigma), numlam)
+                #for j in 1:numpts
+                    #accumcom = 0.0
+                    #for m in 1:1
+                        #accumlam = 0.0
+                        #for s in 1:numlam
+                            #accumD = 0.0
+                            #for d in 1:size(points,1)
+                                #lam = dmean * exp(lams[d,s])
+                                #accumD += points[d,j]*log(lam) - lam - lgamma(points[d,j]+1)
+                            #end
+                            #accumlam += exp(accumD)
+                        #end
+                        #accumcom += accumlam/numlam 
+                    #end
+                    #res[class,j] += accumcom
+                #end
+            #end
+        #end
+        #res = minimum(res / length(db1),2)
+        #vals[1,:] = res
+        #vals[2,:] = res.^2
+    #end
+
+    function error_moments(points, vals)
+        #points: dxn array to evaluate at
+        #vals: 2xn values to store into
+        numpts = size(points, 2)
+        res = zeros(numpts, 2)
+        g1 = calc_g(points', db1, 20)
+        g2 = calc_g(points', db2, 20)
+        vals[1,:] = exp(min(g1,g2))
+        vals[2,:] = vals
+    end
+
+    val, err = hcubature_v(dims, error_moments, xmin=zeros(dims), xmax=xmax, abstol=0.01, maxevals=20)
+
+end
+
+
 function calc_g(points, db, numlam, parts=None; dmean=10.0)
     numpts = size(points, 1)
     res = zeros(numpts)
@@ -300,18 +376,18 @@ function calc_g(points, db, numlam, parts=None; dmean=10.0)
     if parts == None
         parts = ones(length(db))
     end
-    for i in 1:length(db)
+    for i in 1:length(db) # each draw of theta
         curr = db[i]
         lams = cat(3,[rand(MultivariateNormal(curr.mu[:,m], curr.sigma), numlam) for m in 1:curr.k]...)
         alllams[:,(i-1)*numlam+1:i*numlam] = lams[:,:,1]
         currnumlam = size(lams,2)
-        for j in 1:numpts
+        for j in 1:numpts # each point
             accumcom = 0.0
-            for m in 1:curr.k
+            for m in 1:curr.k # each mixture
                 accumlam = 0.0
-                for s in 1:currnumlam
+                for s in 1:currnumlam # each lambda
                     accumD = 0.0
-                    for d in 1:size(points,2)
+                    for d in 1:size(points,2) # each dimension
                         lam = dmean * exp(lams[d,s,m])
                         accumD += points[j,d]*log(lam) - lam - lgamma(points[j,d]+1)
                     end
