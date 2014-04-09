@@ -268,18 +268,19 @@ end
 function e_error_eff(g0, g1, volume)
     # Calculate expectation of error given the two effective class conditional
     # densities (posterior predictive densities)
-    exp(logsum(min(g0,g1) .+ log(volume))), exp(logsum(g0 .+ log(volume)))
+    #exp(logsum(min(g0,g1) .+ log(volume))), exp(logsum(g0 .+ log(volume)))
+    exp(logsum(g0 .+ log(volume))), exp(logsum(g1 .+ log(volume)))
 end
 
-function e_error_hists(points, db1, db2, numlam; dmean=10.0)
-    0
+function error_moments_points(points, db1, db2, numlam, volume; dmean=10.0)
     # using a fixed set of points, evaluate the first moment of the error
-    #
-end
+    numpts = size(points, 2)
+    #g1,gg1 = calc_g_moments(points, db1, numlam)
+    #g2,gg2 = calc_g_moments(points, db2, numlam)
+    g1 = calc_g(points, db1, numlam)
+    g2 = calc_g(points, db2, numlam)
 
-function var_error_hists(points, db1, db2, numlam; dmean=10.0)
-    0
-    # Get second error of moment using histories and fixed points
+    exp(logsum(g1 .+ log(volume))), exp(logsum(g2 .+ log(volume)))
 end
 
 function error_moments_cube(db1, db2, numlam; dmean=10.0, max=(10,10), abstol=0.01, maxevals=0)
@@ -288,20 +289,24 @@ function error_moments_cube(db1, db2, numlam; dmean=10.0, max=(10,10), abstol=0.
     # and error^2 for mutiple points at a time
     assert(length(db1) == length(db2))
     warn("This is assuming c=0.5")
+    global iters = 0
+    global evals = 0
     function error_moments(points, vals)
         #points: dxn array to evaluate at
         #vals: 2xn values to store into
         numpts = size(points, 2)
-        res = zeros(numpts, 2)
-        g1,gg1 = calc_g_moments(points', db1, 20)
-        #g2,gg2 = calc_g_moments(points', db2, 20)
+        iters += 1
+        evals += numpts
+        g1,gg1 = calc_g_moments(points', db1, numlam)
+        g2,gg2 = calc_g_moments(points', db2, numlam)
         #vals[1,:] = exp(min(g1,g2))
         #vals[2,:] = exp(min(gg1,gg2))
         vals[1,:] = exp(g1)
-        vals[2,:] = exp(gg1)
+        vals[2,:] = exp(g2)
     end
-    dims = size(db1[1].mu, 1)
-    val, err = hcubature_v(dims, error_moments, zeros(dims), max, abstol=abstol, maxevals=maxevals)
+    val, err = hcubature_v(2, error_moments, zeros(length(max)), max, abstol=abstol, maxevals=maxevals)
+    println("Cubature used $iters iterations, and $evals * numclasses evaluations")
+    return val, err
 end
 
 function calc_g_moments(points, db, numlam; dmean=10.0)
@@ -316,7 +321,8 @@ function calc_g_moments(points, db, numlam; dmean=10.0)
     for i in 1:dblen # each draw of theta
         curr = db[i]
         assert(curr.k==1)
-        rand!(MultivariateNormal(curr.mu[:,1], curr.sigma), lams)
+        #rand!(MultivariateNormal(curr.mu[:,1], curr.sigma), lams)
+        lams = rand(MultivariateNormal(curr.mu[:,1], curr.sigma), numlam)
         for j in 1:numpts # each point
             accumlam = 0.0
             for s in 1:numlam # each lambda
@@ -328,39 +334,11 @@ function calc_g_moments(points, db, numlam; dmean=10.0)
                 accumlam += exp(accumD)
             end
             res[j] += (accumlam/numlam)
-            res[j] += (accumlam/numlam)^2
+            res2[j] += (accumlam/numlam)^2
         end
     end
     return log(res/dblen), log(res2/dblen)
 end
-
-#function calc_g_moments_old(points, db, numlam; dmean=10.0)
-    #numpts = size(points, 1)
-    #dblen = length(db)
-    #dims = size(points,2)
-
-    #res = zeros(numpts, dblen, numlam)
-    #lams = Array(Float64, dims, numlam)
-    
-    #for i in 1:dblen # each draw of theta
-        #curr = db[i]
-        #assert(curr.k==1)
-        #rand!(MultivariateNormal(curr.mu[:,1], curr.sigma), lams)
-        #for j in 1:numpts # each point
-            #for s in 1:numlam # each lambda
-                #accumD = 0.0
-                #for d in 1:dims # each dimension
-                    #lam = dmean * exp(lams[d,s])
-                    #res[j,i,s] += points[j,d]*log(lam) - lam - lgamma(points[j,d]+1)
-                #end
-            #end
-        #end
-    #end
-    #moment1 = mapslices(logsum, res, (2,3))
-    #lamsum = 2*mapslices(logsum, res, 3)
-    #moment2 = mapslices(logsum, lamsum, 2)
-    #return vec(moment1) .- log(dblen) .- log(numlam), vec(moment2) .- log(dblen) .- 2*log(numlam)
-#end
 
 function calc_g(points, db, numlam; dmean=10.0)
     numpts = size(points, 1)
@@ -384,40 +362,6 @@ function calc_g(points, db, numlam; dmean=10.0)
     end
     return log(res / length(db))
 end
-
-
-#function calc_g(points, db, numlam, parts=None; dmean=10.0)
-    #numpts = size(points, 1)
-    #res = zeros(numpts)
-    #local lams
-    #alllams = Array(Float64, size(points,2), numlam*length(db))
-    #if parts == None
-        #parts = ones(length(db))
-    #end
-    #for i in 1:length(db) # each draw of theta
-        #curr = db[i]
-        #lams = cat(3,[rand(MultivariateNormal(curr.mu[:,m], curr.sigma), numlam) for m in 1:curr.k]...)
-        #alllams[:,(i-1)*numlam+1:i*numlam] = lams[:,:,1]
-        #currnumlam = size(lams,2)
-        #for j in 1:numpts # each point
-            #accumcom = 0.0
-            #for m in 1:curr.k # each mixture
-                #accumlam = 0.0
-                #for s in 1:currnumlam # each lambda
-                    #accumD = 0.0
-                    #for d in 1:size(points,2) # each dimension
-                        #lam = dmean * exp(lams[d,s,m])
-                        #accumD += points[j,d]*log(lam) - lam - lgamma(points[j,d]+1)
-                    #end
-                    #accumlam += exp(accumD)
-                #end
-                #accumcom += accumlam/currnumlam * curr.w[m]
-            #end
-            #res[j] += parts[i] * accumcom
-        #end
-    #end
-    #return log(res / sum(parts))#, alllams
-#end
 
 function predict(db0, db1, points)
     g0 = calc_g(points, db0, 20)

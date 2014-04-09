@@ -4,7 +4,7 @@ reload("src/mpm.jl")
 #using PyPlot
 using Distributions
 
-srand(1)
+#srand(1)
 blas_set_num_threads(1)
 
 
@@ -79,7 +79,7 @@ D = 2
 # Class 0
 ######################################################################
 
-trumu, trucov, data, tst_data = gen_data_jason(-1.0)
+trumu, trucov, data, tst_data = gen_data_jason(0.0)
 cov = eye(D,D) 
 #cov = [0.5 -0.2; -0.2 1.0]
 mu = ones(D,kmax)
@@ -100,22 +100,22 @@ pmoves.priorkappa = 80.0
 obj_a = MPM.MPMCls(prior, data, deepcopy(start), pmoves, 10.0)
 obj_a.usepriors = true
 
-mymh_a = OBC.MHRecord(obj_a,burn=5000,thin=50)
-sample(mymh_a,10000)
+#mymh_a = OBC.MHRecord(obj_a,burn=5000,thin=50)
+#sample(mymh_a,10000)
 
 ######################################################################
 # Class 1
 ######################################################################
 
-trumub, trucovb, datab, tst_datab = gen_data_jason(-1.0)
+trumub, trucovb, datab, tst_datab = gen_data_jason(-2.0)
 start = MPM.MPMParams(mu, #mu :: Matrix{Float64}
     cov, #sigma :: Matrix{Float64}
     ones(kmax)/kmax, #w :: Vector{Float64}
     clamp(log(datab'/10),-3.0,Inf), #lam :: Matrix{Float64}
     1) #k :: Int
 obj_b = MPM.MPMCls(prior, datab, deepcopy(start), pmoves, 10.0)
-mymh_b = OBC.MHRecord(obj_b,burn=5000,thin=50)
-OBC.sample(mymh_b,10000)
+#mymh_b = OBC.MHRecord(obj_b,burn=5000,thin=50)
+#OBC.sample(mymh_b,10000)
 
 ######################################################################
 # Plotting
@@ -157,21 +157,41 @@ OBC.sample(mymh_b,10000)
 #err = error_points(mymh_a.db, mymh_b.db, [tst_data; tst_datab], [zeros(size(tst_data,1)), ones(size(tst_datab,1))]) 
 #println("holdout error: $err")
 
-gext = [0,20.0,0,20]
-max = (20,20)
-n1, n2, xstride, ystride, grid = MPM.gen_grid(gext, 30)
+gext = [0,30.0,0,30]
+max = (300,300)
+n1, n2, xstride, ystride, grid = MPM.gen_grid(gext, 31)
 
-@time (be,bmse),(bee,bmsee) = MPM.error_moments_cube(mymh_a.db, mymh_b.db, 20, max=max, abstol=0.001)
+println("")
+println("Cubature:")
+@time (be,bmse),(bee,bmsee) = MPM.error_moments_cube(mymh_a.db, mymh_b.db, 20, max=max, abstol=0.01)
 
-@time g0 = MPM.calc_g(grid, mymh_a.db, 20)
-@time g0test,g02test = MPM.calc_g_moments(grid, mymh_a.db, 20)
-@time g0test2,g02test2 = MPM.calc_g_moments2(grid, mymh_a.db, 20)
+println("")
+println("points:")
+@time b1,b2 = MPM.error_moments_points(grid, mymh_a.db, mymh_b.db, 20, xstride*ystride)
 
-g1 = MPM.calc_g(grid, mymh_b.db, 20)
+println("")
+println("individual points:")
+@time g0,_ = MPM.calc_g_moments(grid, mymh_a.db, 20)
+@time g1,_ = MPM.calc_g_moments(grid, mymh_b.db, 20)
+@time effbe1, effbe2 = MPM.e_error_eff(g0, g1, xstride*ystride)
 
-@show be2, be2test = MPM.e_error_eff(g0, g1, xstride*ystride)
-
+println("")
+println("Values:")
+println("")
+println("Cubature:")
 @show (be,bmse),(bee,bmsee)
+
+println("")
+println("points:")
+@show b1,b2
+
+println("")
+println("individual points:")
+@show effbe1, effbe2
+
+#@time g0o = MPM.calc_g(grid, mymh_a.db, 20)
+#@time g1o = MPM.calc_g(grid, mymh_b.db, 20)
+#@show be2, be2test = MPM.e_error_eff(g0o, g1o, xstride*ystride)
 
 ##### MAP #####
 #figure()
