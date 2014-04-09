@@ -85,22 +85,22 @@ cov = eye(D,D)
 mu = ones(D,kmax)
 #mu = [1.6 -1.0; 1.6 -1.0]
 #mu = [0.2 0.2]'
-prior = MPMPrior(D=2, kmax=kmax, kappa=10.)
-start = MPMParams(mu, #mu :: Matrix{Float64}
+prior = MPM.MPMPrior(D=2, kmax=kmax, kappa=10.)
+start = MPM.MPMParams(mu, #mu :: Matrix{Float64}
     cov, #sigma :: Matrix{Float64}
     ones(kmax)/kmax, #w :: Vector{Float64}
     clamp(log(data'/10),-3.0,Inf), #lam :: Matrix{Float64}
     1) #k :: Int
 
-pmoves = MPMPropMoves()
+pmoves = MPM.MPMPropMoves()
 pmoves.lammove = 0.01
 pmoves.mumove = 0.2
 pmoves.priorkappa = 80.0
 
-obj_a = MPMCls(prior, data, deepcopy(start), pmoves, 10.0)
+obj_a = MPM.MPMCls(prior, data, deepcopy(start), pmoves, 10.0)
 obj_a.usepriors = true
 
-mymh_a = MHRecord(obj_a,burn=5000,thin=50)
+mymh_a = OBC.MHRecord(obj_a,burn=5000,thin=50)
 sample(mymh_a,10000)
 
 ######################################################################
@@ -108,14 +108,14 @@ sample(mymh_a,10000)
 ######################################################################
 
 trumub, trucovb, datab, tst_datab = gen_data_jason(-1.0)
-start = MPMParams(mu, #mu :: Matrix{Float64}
+start = MPM.MPMParams(mu, #mu :: Matrix{Float64}
     cov, #sigma :: Matrix{Float64}
     ones(kmax)/kmax, #w :: Vector{Float64}
     clamp(log(datab'/10),-3.0,Inf), #lam :: Matrix{Float64}
     1) #k :: Int
-obj_b = MPMCls(prior, datab, deepcopy(start), pmoves, 10.0)
-mymh_b = MHRecord(obj_b,burn=5000,thin=50)
-sample(mymh_b,10000)
+obj_b = MPM.MPMCls(prior, datab, deepcopy(start), pmoves, 10.0)
+mymh_b = OBC.MHRecord(obj_b,burn=5000,thin=50)
+OBC.sample(mymh_b,10000)
 
 ######################################################################
 # Plotting
@@ -157,7 +157,19 @@ sample(mymh_b,10000)
 #err = error_points(mymh_a.db, mymh_b.db, [tst_data; tst_datab], [zeros(size(tst_data,1)), ones(size(tst_datab,1))]) 
 #println("holdout error: $err")
 
-(be,bmse),(bee,bmsee) = MPM.error_moments_cube(mymh_a.db, mymh_b.db, 20)
+gext = [0,20.0,0,20]
+max = (20,20)
+n1, n2, xstride, ystride, grid = MPM.gen_grid(gext, 30)
+
+@time (be,bmse),(bee,bmsee) = MPM.error_moments_cube(mymh_a.db, mymh_b.db, 20, max=max, abstol=0.001)
+
+@time g0 = MPM.calc_g(grid, mymh_a.db, 20)
+@time g0test,g02test = MPM.calc_g_moments(grid, mymh_a.db, 20)
+@time g0test2,g02test2 = MPM.calc_g_moments2(grid, mymh_a.db, 20)
+
+g1 = MPM.calc_g(grid, mymh_b.db, 20)
+
+@show be2, be2test = MPM.e_error_eff(g0, g1, xstride*ystride)
 
 @show (be,bmse),(bee,bmsee)
 

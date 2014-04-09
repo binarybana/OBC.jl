@@ -5,6 +5,7 @@ using Distributions
 using OBC
 using Cubature
 import OBC: propose, energy, reject, logsum
+include("utils.jl")
 
 export MPMPrior, MPMParams, MPMPropMoves, MPMCls, calc_g, gen_points, 
     gen_posterior_points, calc_pvals, error_points, predict, error_moments_cube, 
@@ -264,10 +265,10 @@ function calc_pvals(Ts, points, db, d=10.0)
     return pvals, tru_ts, tvals
 end
 
-function e_error_eff(g0, g1)
+function e_error_eff(g0, g1, volume)
     # Calculate expectation of error given the two effective class conditional
     # densities (posterior predictive densities)
-    exp(logsum(max(g0,g1)))
+    exp(logsum(min(g0,g1) .+ log(volume))), exp(logsum(g0 .+ log(volume)))
 end
 
 function e_error_hists(points, db1, db2, numlam; dmean=10.0)
@@ -281,7 +282,7 @@ function var_error_hists(points, db1, db2, numlam; dmean=10.0)
     # Get second error of moment using histories and fixed points
 end
 
-function error_moments_cube(db1, db2, numlam; dmean=10.0)
+function error_moments_cube(db1, db2, numlam; dmean=10.0, max=(10,10), abstol=0.01, maxevals=0)
     # Get both moments using histories and adaptive integration by
     # calling Cubature.hquadrature_v with a function that evaluates the error,
     # and error^2 for mutiple points at a time
@@ -293,41 +294,73 @@ function error_moments_cube(db1, db2, numlam; dmean=10.0)
         numpts = size(points, 2)
         res = zeros(numpts, 2)
         g1,gg1 = calc_g_moments(points', db1, 20)
-        g2,gg2 = calc_g_moments(points', db2, 20)
-        vals[1,:] = exp(min(g1,g2))
-        vals[2,:] = exp(min(gg1,gg2))
-        #vals[1,:] = exp(g1)
-        #vals[2,:] = exp(gg1)
+        #g2,gg2 = calc_g_moments(points', db2, 20)
+        #vals[1,:] = exp(min(g1,g2))
+        #vals[2,:] = exp(min(gg1,gg2))
+        vals[1,:] = exp(g1)
+        vals[2,:] = exp(gg1)
     end
     dims = size(db1[1].mu, 1)
-    xmax = (10, 10)
-    val, err = hcubature_v(dims, error_moments, zeros(dims), xmax, abstol=0.01, maxevals=0)
+    val, err = hcubature_v(dims, error_moments, zeros(dims), max, abstol=abstol, maxevals=maxevals)
 end
 
 function calc_g_moments(points, db, numlam; dmean=10.0)
     numpts = size(points, 1)
+    dblen = length(db)
+    dims = size(points,2)
+
     res = zeros(numpts)
     res2 = zeros(numpts)
-    for i in 1:length(db) # each draw of theta
+    lams = Array(Float64, dims, numlam)
+    
+    for i in 1:dblen # each draw of theta
         curr = db[i]
         assert(curr.k==1)
-        lams = rand(MultivariateNormal(curr.mu[:,1], curr.sigma), numlam)
+        rand!(MultivariateNormal(curr.mu[:,1], curr.sigma), lams)
         for j in 1:numpts # each point
             accumlam = 0.0
             for s in 1:numlam # each lambda
                 accumD = 0.0
-                for d in 1:size(points,2) # each dimension
+                for d in 1:dims # each dimension
                     lam = dmean * exp(lams[d,s])
                     accumD += points[j,d]*log(lam) - lam - lgamma(points[j,d]+1)
                 end
                 accumlam += exp(accumD)
             end
-            res[j] += accumlam/numlam
-            res2[j] += (accumlam/numlam)^2
+            res[j] += (accumlam/numlam)
+            res[j] += (accumlam/numlam)^2
         end
     end
-    return log(res / length(db)), log(res2 / length(db))
+    return log(res/dblen), log(res2/dblen)
 end
+
+#function calc_g_moments_old(points, db, numlam; dmean=10.0)
+    #numpts = size(points, 1)
+    #dblen = length(db)
+    #dims = size(points,2)
+
+    #res = zeros(numpts, dblen, numlam)
+    #lams = Array(Float64, dims, numlam)
+    
+    #for i in 1:dblen # each draw of theta
+        #curr = db[i]
+        #assert(curr.k==1)
+        #rand!(MultivariateNormal(curr.mu[:,1], curr.sigma), lams)
+        #for j in 1:numpts # each point
+            #for s in 1:numlam # each lambda
+                #accumD = 0.0
+                #for d in 1:dims # each dimension
+                    #lam = dmean * exp(lams[d,s])
+                    #res[j,i,s] += points[j,d]*log(lam) - lam - lgamma(points[j,d]+1)
+                #end
+            #end
+        #end
+    #end
+    #moment1 = mapslices(logsum, res, (2,3))
+    #lamsum = 2*mapslices(logsum, res, 3)
+    #moment2 = mapslices(logsum, lamsum, 2)
+    #return vec(moment1) .- log(dblen) .- log(numlam), vec(moment2) .- log(dblen) .- 2*log(numlam)
+#end
 
 function calc_g(points, db, numlam; dmean=10.0)
     numpts = size(points, 1)
@@ -341,7 +374,7 @@ function calc_g(points, db, numlam; dmean=10.0)
             for s in 1:numlam # each lambda
                 accumD = 0.0
                 for d in 1:size(points,2) # each dimension
-                    lam = dmean * exp(lams[d,s,m])
+                    lam = dmean * exp(lams[d,s])
                     accumD += points[j,d]*log(lam) - lam - lgamma(points[j,d]+1)
                 end
                 accumlam += exp(accumD)

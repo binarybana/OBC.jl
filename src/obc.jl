@@ -3,14 +3,14 @@ module OBC
 using Distributions
 
 export
-    Sampler,
-    MHRecord,
-    sample,
-    #propose,
-    #energy,
-    #reject,
-    plot_all,
-    plot_trace,
+    Sampler, 
+    MHRecord, 
+    sample, 
+    #propose, 
+    #energy, 
+    #reject, 
+    plot_all, 
+    plot_trace, 
     logsum
     #set_energy_limits,
 
