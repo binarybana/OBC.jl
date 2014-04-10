@@ -164,20 +164,33 @@ bes = Float64[]
 bee2s = Float64[]
 brmses = Float64[]
 
+becubes = Float64[]
+becubese = Float64[]
+
 g1 = MPM.calc_g(grid, mymh_a.db, 20)
 g2 = MPM.calc_g(grid, mymh_b.db, 20)
 
+########### bee_e_cubes testing ########
 for i=1:20
-    be,bee2 = MPM.bee_moments(grid, mymh_a.db, mymh_b.db, 20, xstride*ystride)
-    #be,bee2 = MPM.bee_moments(grid, mymh_a.db, mymh_b.db, g1, g2, 20, xstride*ystride)
-    #@show be,brmse,bee2
+    @time be = MPM.bee_e_naive(grid, mymh_a.db, mymh_b.db, 20, xstride*ystride)
     push!(bes, be)
-    push!(bee2s, bee2)
-    push!(brmses, bee2 - be^2)
-    @show median(brmses)
-end
-@show std(bes), std(bee2s), std(brmses)
 
+    @time bec,err = MPM.bee_e_cube(mymh_a.db, mymh_b.db, 20, max=(30,30), abstol=0.005)
+    push!(becubes, bec)
+    push!(becubese, err)
+end
+@show std(bes), std(becubes), std(becubese)
+
+########### bee_moments testing ########
+#for i=1:20
+    #@time be,bee2 = MPM.bee_moments(grid, mymh_a.db, mymh_b.db, 20, xstride*ystride)
+    ##be,bee2 = MPM.bee_moments(grid, mymh_a.db, mymh_b.db, g1, g2, 20, xstride*ystride)
+    ##@show be,brmse,bee2
+    #push!(bes, be)
+    #push!(bee2s, bee2)
+    #push!(brmses, bee2 - be^2)
+#end
+#@show std(bes), std(bee2s), std(brmses)
 
 #println("")
 #@time be,brmse,bee2 = MPM.bee_moments(grid, mymh_a.db, mymh_b.db, 20, xstride*ystride)

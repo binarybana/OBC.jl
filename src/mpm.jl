@@ -265,13 +265,8 @@ function calc_pvals(Ts, points, db, d=10.0)
     return pvals, tru_ts, tvals
 end
 
-function e_error_eff(g0, g1, volume)
-    # Calculate expectation of error given the two effective class conditional
-    # densities (posterior predictive densities)
-    exp(logsum(min(g0,g1) .+ log(volume)))*0.5
-end
-
 function bee_moments(points,db1::Vector{Any},db2::Vector{Any},numlam,volume;dmean=10.0)
+    # FIXME This is only valid for c=0.5
     g1 = calc_g(points, db1, numlam)
     g2 = calc_g(points, db2, numlam)
     bee_moments(points,db1,db2,g1,g2,numlam,volume,dmean=dmean)
@@ -279,6 +274,7 @@ end
 
 function bee_moments(points,db1::Vector{Any}, db2::Vector{Any}, 
         g1::Vector{Float64},g2::Vector{Float64},numlam,volume;dmean=10.0)
+    # FIXME This is only valid for c=0.5
     bee = exp(logsum(min(g1,g2) .+ log(volume)))*0.5
     numpts = size(points, 1)
     dims = size(points,2)
@@ -296,7 +292,6 @@ function bee_moments(points,db1::Vector{Any}, db2::Vector{Any},
     lgpoints = lgamma(points .+ 1)
 
     for i in 1:dblen 
-        #dbpass = -Inf
         dbpass = 0.0
         curr1 = db1[i]
         curr2 = db2[i]
@@ -310,77 +305,64 @@ function bee_moments(points,db1::Vector{Any}, db2::Vector{Any},
             llams2[k] = log(dmean) + lams2[k]
         end
         for j in 1:numpts # each point
-            #accumlam1 = -Inf
-            #accumlam2 = -Inf
             accumlam1 = 0.0
             accumlam2 = 0.0
             for s in 1:numlam # each lambda
                 accumD1 = 0.0
                 accumD2 = 0.0
                 for d in 1:dims # each dimension
-                    #lam1 = dmean * exp(lams1[d,s])
-                    #lam2 = dmean * exp(lams2[d,s])
-                    #accumD1 += points[d,j]*log(lam1) - lam1 - lgpoints[d,j]
-                    #accumD2 += points[d,j]*log(lam2) - lam2 - lgpoints[d,j]
                     accumD1 += points[d,j]*llams1[d,s] - rlams1[d,s] - lgpoints[d,j]
                     accumD2 += points[d,j]*llams2[d,s] - rlams2[d,s] - lgpoints[d,j]
                 end
-                #accumlam1 = logsum(accumlam1, accumD1)
-                #accumlam2 = logsum(accumlam2, accumD2)
                 accumlam1 += exp(accumD1)
                 accumlam2 += exp(accumD2)
             end
             temp = g1[j] < g2[j] ? accumlam1 : accumlam2
             #temp = accumlam1 # for testing purposes
-            #dbpass = logsum(dbpass, temp)
             dbpass += temp
         end
-        #temp = exp(log(0.5)+dbpass-log(numlam)+log(volume))
         temp = 0.5*dbpass/numlam*volume
         bee2 += temp^2
     end
     bee2 /= dblen
-    #bee2 = exp(logsum(res .+ log(volume)))
-    #bee2 = sum(res .* log(volume))
     return bee, bee2
-    #return bee, sqrt(bee2 - bee^2), bee2
 end
 
-function bee_1st_moment(points, db1, db2, numlam, volume; dmean=10.0)
-    # using a fixed set of points, evaluate the first moment of the error
-    g1,gg1 = calc_g_moments(points, db1, numlam)
-    g2,gg2 = calc_g_moments(points, db2, numlam)
-
-    #exp(logsum(g1 .+ log(volume))), exp(logsum(g2 .+ log(volume)))
-    bee = exp(logsum(min(g1,g2) .+ log(volume)))
-    bee2 = exp(logsum(min(gg1,gg2) .+ log(volume)))
-    return bee*0.5, bee2 - bee^2
+function bee_e_eff(g0, g1, volume)
+    # FIXME This is only valid for c=0.5
+    # Calculate expectation of error given the two effective class conditional
+    # densities (posterior predictive densities)
+    exp(logsum(min(g0,g1) .+ log(volume)))*0.5
 end
 
-function error_moments_cube(db1, db2, numlam; dmean=10.0, max=(10,10), abstol=0.01, maxevals=0)
-    # Get both moments using histories and adaptive integration by
-    # calling Cubature.hquadrature_v with a function that evaluates the error,
-    # and error^2 for mutiple points at a time
+function bee_e_naive(points, db1, db2, numlam, volume)
+    # FIXME This is only valid for c=0.5
+    g1 = calc_g(points, db1, numlam)
+    g2 = calc_g(points, db2, numlam)
+    bee_e_eff(g1,g2,volume)
+end
+
+function bee_e_cube(db1, db2, numlam; dmean=10.0, max=(10,10), abstol=0.01, maxevals=0)
+    # FIXME This is only valid for c=0.5
+    # Get the first moments using histories and adaptive integration by
+    # calling Cubature.hquadrature_v with a function that evaluates the error
+    # at multiple points at a time
     assert(length(db1) == length(db2))
-    warn("This is assuming c=0.5")
     global iters = 0
     global evals = 0
-    function error_moments(points, vals)
+    function error_1st(points, vals)
         #points: dxn array to evaluate at
         #vals: 2xn values to store into
         numpts = size(points, 2)
         iters += 1
         evals += numpts
-        g1,gg1 = calc_g_moments(points', db1, numlam)
-        g2,gg2 = calc_g_moments(points', db2, numlam)
-        vals[1,:] = exp(min(g1,g2))
-        vals[2,:] = exp(min(gg1,gg2))
-        #vals[1,:] = exp(g1)
-        #vals[2,:] = exp(g2)
+        g1 = calc_g(points', db1, numlam)
+        g2 = calc_g(points', db2, numlam)
+        vals[:] = exp(min(g1,g2))
     end
-    val, err = hcubature_v(2, error_moments, zeros(length(max)), max, abstol=abstol, maxevals=maxevals)
+    val, err = hcubature_v(error_1st, zeros(length(max)), max, abstol=abstol, maxevals=maxevals)
     println("Cubature used $iters iterations, and $evals * numclasses evaluations")
-    return val[1]*0.5, val[2] - val[1]^2, err
+    return val*0.5, err
 end
 
 function calc_g(points, db, numlam; dmean=10.0)
