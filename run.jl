@@ -31,7 +31,7 @@ num_feat = setv(params, "num_feat", 2, int)
 rseed = setv(params, "rseed", rand(Uint), int)
 #seed = setv(params, "seed", 1234, int)
 seed = setv(params, "seed", rand(Uint), int)
-Ntrn = setv(params, "Ntrn", 10, int)
+Ntrn = setv(params, "Ntrn", 20, int)
 Ntst = setv(params, "Ntst", 300, int)
 f_glob = setv(params, "f_glob", 1, int)
 subclasses = setv(params, "subclasses", 2, int)
@@ -94,8 +94,8 @@ start = MPM.MPMParams(mu, #mu :: Matrix{Float64}
 
 pmoves = MPM.MPMPropMoves()
 pmoves.lammove = 0.01
-pmoves.mumove = 0.2
-pmoves.priorkappa = 80.0
+pmoves.mumove = 0.1
+pmoves.priorkappa = 100.0
 
 obj_a = MPM.MPMCls(prior, data, deepcopy(start), pmoves, 10.0)
 obj_a.usepriors = true
@@ -107,13 +107,14 @@ obj_a.usepriors = true
 # Class 1
 ######################################################################
 
-trumub, trucovb, datab, tst_datab = gen_data_jason(-2.0)
+trumub, trucovb, datab, tst_datab = gen_data_jason(-1.0)
 start = MPM.MPMParams(mu, #mu :: Matrix{Float64}
     cov, #sigma :: Matrix{Float64}
     ones(kmax)/kmax, #w :: Vector{Float64}
     clamp(log(datab'/10),-3.0,Inf), #lam :: Matrix{Float64}
     1) #k :: Int
 obj_b = MPM.MPMCls(prior, datab, deepcopy(start), pmoves, 10.0)
+
 #mymh_b = OBC.MHRecord(obj_b,burn=5000,thin=50)
 #OBC.sample(mymh_b,10000)
 
@@ -154,40 +155,99 @@ obj_b = MPM.MPMCls(prior, datab, deepcopy(start), pmoves, 10.0)
 #plot(data[:,1], data[:,2], "g.", alpha=0.8)
 #plot(datab[:,1], datab[:,2], "r.", alpha=0.8)
 
-#err = error_points(mymh_a.db, mymh_b.db, [tst_data; tst_datab], [zeros(size(tst_data,1)), ones(size(tst_datab,1))]) 
-#println("holdout error: $err")
-
 gext = [0,30.0,0,30]
-max = (300,300)
-n1, n2, xstride, ystride, grid = MPM.gen_grid(gext, 31)
+n1, n2, xstride, ystride, grid = MPM.gen_grid(gext, 30)
 
 println("")
-println("Cubature:")
-@time (be,bmse),(bee,bmsee) = MPM.error_moments_cube(mymh_a.db, mymh_b.db, 20, max=max, abstol=0.01)
+println("New moments:")
+bes = Float64[]
+bee2s = Float64[]
+brmses = Float64[]
 
-println("")
-println("points:")
-@time b1,b2 = MPM.error_moments_points(grid, mymh_a.db, mymh_b.db, 20, xstride*ystride)
+g1 = MPM.calc_g(grid, mymh_a.db, 20)
+g2 = MPM.calc_g(grid, mymh_b.db, 20)
 
-println("")
-println("individual points:")
-@time g0,_ = MPM.calc_g_moments(grid, mymh_a.db, 20)
-@time g1,_ = MPM.calc_g_moments(grid, mymh_b.db, 20)
-@time effbe1, effbe2 = MPM.e_error_eff(g0, g1, xstride*ystride)
+for i=1:20
+    be,bee2 = MPM.bee_moments(grid, mymh_a.db, mymh_b.db, 20, xstride*ystride)
+    #be,bee2 = MPM.bee_moments(grid, mymh_a.db, mymh_b.db, g1, g2, 20, xstride*ystride)
+    #@show be,brmse,bee2
+    push!(bes, be)
+    push!(bee2s, bee2)
+    push!(brmses, bee2 - be^2)
+    @show median(brmses)
+end
+@show std(bes), std(bee2s), std(brmses)
 
-println("")
-println("Values:")
-println("")
-println("Cubature:")
-@show (be,bmse),(bee,bmsee)
 
-println("")
-println("points:")
-@show b1,b2
+#println("")
+#@time be,brmse,bee2 = MPM.bee_moments(grid, mymh_a.db, mymh_b.db, 20, xstride*ystride)
+#@show be,brmse,bee2
+#println("")
 
-println("")
-println("individual points:")
-@show effbe1, effbe2
+##### PROFILING ####
+#Profile.clear()
+#@profile MPM.calc_g(grid, mymh_a.db, 20)
+##@profile MPM.bee_moments(grid, mymh_a.db, mymh_b.db, 20, xstride*ystride)
+#Profile.print()
+#println("")
+#Profile.print(format=:flat)
+####################
+
+#max = (30,30)
+#println("")
+#println("Cubature:")
+#@time be,bmse,err = MPM.error_moments_cube(mymh_a.db, mymh_b.db, 20, max=max, abstol=0.01)
+
+#println("")
+#println("points:")
+#@time be2,bmse2 = MPM.error_moments_points(grid, mymh_a.db, mymh_b.db, 20, xstride*ystride)
+
+#println("")
+#println("individual points:")
+#@time g0,gg0 = MPM.calc_g_moments(grid, mymh_a.db, 20)
+#@time g1,gg1 = MPM.calc_g_moments(grid, mymh_b.db, 20)
+#@time effbe = MPM.e_error_eff(g0, g1, xstride*ystride)
+
+#println("")
+#println("Values:")
+#println("")
+#println("Cubature:")
+#@show (be,bmse),err
+
+#println("")
+#println("points:")
+#@show be2,bmse2
+
+#println("")
+#println("individual points:")
+#@show effbe
+
+err = MPM.error_points(mymh_a.db, mymh_b.db, [tst_data; tst_datab], [zeros(size(tst_data,1)), ones(size(tst_datab,1))]) 
+println("holdout error: $err")
+
+
+#gmin = min(gg0,gg1)
+#close("all")
+#figure()
+#N=n1
+#imshow(reshape(gmin,N,N)', extent=gext, aspect="equal", origin="lower")
+#contour(reshape(gmin,N,N)', extent=gext, aspect="equal", origin="lower")
+#plot(data[:,1], data[:,2], "g.", alpha=0.8)
+#plot(datab[:,1], datab[:,2], "r.", alpha=0.8)
+
+#figure()
+#gmin = exp(min(g0,g1))
+#imshow(reshape(gmin,N,N)', extent=gext, aspect="equal", origin="lower")
+#contour(reshape(gmin,N,N)', extent=gext, aspect="equal", origin="lower")
+#plot(data[:,1], data[:,2], "g.", alpha=0.8)
+#plot(datab[:,1], datab[:,2], "r.", alpha=0.8)
+
+#figure()
+#gmin = g0 .- g1
+#imshow(reshape(gmin,N,N)', extent=gext, aspect="equal", origin="lower")
+#contour(reshape(gmin,N,N)', levels = [0.0], extent=gext, aspect="equal", origin="lower")
+#plot(tst_data[:,1], tst_data[:,2], "g.", alpha=0.8)
+#plot(tst_datab[:,1], tst_datab[:,2], "r.", alpha=0.8)
 
 #@time g0o = MPM.calc_g(grid, mymh_a.db, 20)
 #@time g1o = MPM.calc_g(grid, mymh_b.db, 20)
