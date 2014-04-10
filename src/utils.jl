@@ -25,8 +25,8 @@ function get_grid(data; positive=true, x=0.0, y=0.0)
     @assert size(data,2) == 2
     lx,ly = mapslices(minimum, data, 1)
     hx,hy = mapslices(maximum, data, 1)
-    xspread = hx-lx
-    yspread = hy-ly
+    xspread = max(hx-lx, 1)
+    yspread = max(hy-ly, 1)
 
     if positive
         lx = clamp(lx-xspread*0.2, 0.1, Inf)
@@ -44,7 +44,7 @@ function get_grid(data; positive=true, x=0.0, y=0.0)
     else
         gext = [lx, hx, ly, hy]
     end
-    gen_grid(map(iround,gext))
+    gext, gen_grid(map(iround,gext))
 end
 
 function gen_grid(gext, N=30)

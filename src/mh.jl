@@ -67,15 +67,17 @@ function sample(rec::MHRecord, iters::Int; verbose=false)
             push!(rec.db, deepcopy(rec.obj.curr))
         end
         
-        if (rec.iteration) % 1000 == 0
+        if (rec.iteration) % 1000 == 0 && rec.verbose
             @printf "Iteration: %8d, best energy: %7f, current energy: %7f\n" rec.iteration rec.mapenergy oldenergy
         end
         rec.iteration += 1
     end
     #save_state_db(rec, temperature) #FIXME
-    println("Accepted samples: $(rec.count_accept)")
-    println("Total samples: $(rec.count_total)")
-    println("Acceptance: $(rec.count_accept/rec.count_total)")
+    if rec.verbose
+        println("Accepted samples: $(rec.count_accept)")
+        println("Total samples: $(rec.count_total)")
+        println("Acceptance: $(rec.count_accept/rec.count_total)")
+    end
 end
 
 # To be overwritten
