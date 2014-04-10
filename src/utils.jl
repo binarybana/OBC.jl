@@ -18,11 +18,7 @@ function logsum(x::AbstractArray, w::AbstractArray)
 end
 
 function logsum(x::Float64, y::Float64)
-    if x > y
-        return x+log1p(exp(y-x))
-    else
-        return y+log1p(exp(x-y))
-    end
+    x > y ? x+log1p(exp(y-x)) : y+log1p(exp(x-y))
 end
 
 function get_grid(data; positive=true, x=0.0, y=0.0)
