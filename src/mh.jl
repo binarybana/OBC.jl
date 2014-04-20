@@ -34,7 +34,9 @@ function sample(rec::MHRecord, iters::Int; verbose=false)
     #dbsize = div(rec.iteration + iters - rec.burn, rec.thin)
     #dbsize = dbsize > 0 ? dbsize : 0
     #init_db(rec, dbsize) # FIXME
-    println("Initial energy: $oldenergy")
+    if rec.verbose
+        println("Initial energy: $oldenergy")
+    end
 
     for current_iter = rec.iteration:(rec.iteration+iters-1)
         scheme = propose(rec.obj)
