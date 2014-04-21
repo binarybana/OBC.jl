@@ -4,7 +4,7 @@ using Stats
 using Distributions
 using OBC
 using Cubature
-import OBC: propose, energy, reject, logsum
+import OBC: propose, energy, reject
 include("utils.jl")
 
 export MPMPrior, MPMParams, MPMPropMoves, MPMCls, calc_g, gen_points, 
