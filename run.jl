@@ -1,7 +1,7 @@
 reload("src/OBC.jl")
 reload("src/mpm.jl")
 #using OBC, MPM
-#using PyPlot
+using PyPlot
 using Distributions
 
 #srand(1)
@@ -31,7 +31,7 @@ num_feat = setv(params, "num_feat", 2, int)
 rseed = setv(params, "rseed", rand(Uint), int)
 #seed = setv(params, "seed", 1234, int)
 seed = setv(params, "seed", rand(Uint), int)
-Ntrn = setv(params, "Ntrn", 20, int)
+Ntrn = setv(params, "Ntrn", 10, int)
 Ntst = setv(params, "Ntst", 300, int)
 f_glob = setv(params, "f_glob", 1, int)
 subclasses = setv(params, "subclasses", 2, int)
@@ -79,17 +79,22 @@ D = 2
 # Class 0
 ######################################################################
 
-trumu, trucov, data, tst_data = gen_data_jason(0.0)
+#trumu, trucov, data, tst_data = gen_data_jason(0.0)
+tst_data = rand(510,D) .+ 10
+#tst_data[:,1] .+= 0
+tst_data[:,1] = rand(0:1, 510)
+data = tst_data[1:10,:]
+
 cov = eye(D,D) 
 #cov = [0.5 -0.2; -0.2 1.0]
 mu = ones(D,kmax)
 #mu = [1.6 -1.0; 1.6 -1.0]
 #mu = [0.2 0.2]'
-prior = MPM.MPMPrior(D=2, kmax=kmax, kappa=10.)
+prior = MPM.MPMPrior(D=D, kmax=kmax, kappa=10.)
 start = MPM.MPMParams(mu, #mu :: Matrix{Float64}
     cov, #sigma :: Matrix{Float64}
     ones(kmax)/kmax, #w :: Vector{Float64}
-    clamp(log(data'/10),-3.0,Inf), #lam :: Matrix{Float64}
+    clamp(log(data'/10),-8.0,Inf), #lam :: Matrix{Float64}
     1) #k :: Int
 
 pmoves = MPM.MPMPropMoves()
@@ -100,23 +105,45 @@ pmoves.priorkappa = 100.0
 obj_a = MPM.MPMCls(prior, data, deepcopy(start), pmoves, 10.0)
 obj_a.usepriors = true
 
-#mymh_a = OBC.MHRecord(obj_a,burn=5000,thin=50)
-#sample(mymh_a,10000)
+mymh_a = OBC.MHRecord(obj_a,burn=1000,thin=50)
+sample(mymh_a,10000)
 
 ######################################################################
 # Class 1
 ######################################################################
 
-trumub, trucovb, datab, tst_datab = gen_data_jason(-1.0)
+#trumub, trucovb, datab, tst_datab = gen_data_jason(-1.0)
+tst_datab = rand(510,D) .+ 10
+tst_datab[:,2] .+= 0.0
+tst_datab[:,1] = rand(0:1, 510)
+datab = tst_datab[1:10,:]
+
 start = MPM.MPMParams(mu, #mu :: Matrix{Float64}
     cov, #sigma :: Matrix{Float64}
     ones(kmax)/kmax, #w :: Vector{Float64}
-    clamp(log(datab'/10),-3.0,Inf), #lam :: Matrix{Float64}
+    clamp(log(datab'/10),-8.0,Inf), #lam :: Matrix{Float64}
     1) #k :: Int
 obj_b = MPM.MPMCls(prior, datab, deepcopy(start), pmoves, 10.0)
 
-#mymh_b = OBC.MHRecord(obj_b,burn=5000,thin=50)
-#OBC.sample(mymh_b,10000)
+mymh_b = OBC.MHRecord(obj_b,burn=1000,thin=50)
+OBC.sample(mymh_b,10000)
+
+#gext = [0,30.0,0,30]
+#n1, n2, xstride, ystride, grid = MPM.gen_grid(gext, 30)
+#gext, (n1, n2, xstride, ystride, grid) = MPM.get_grid(vcat(data,datab))
+
+#g1 = MPM.calc_g(grid, mymh_a.db, 20)
+#g2 = MPM.calc_g(grid, mymh_b.db, 20)
+
+@time be1 = MPM.bee_e_data(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
+@time be2 = MPM.bee_e_data(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
+@time becube = MPM.bee_e_cube(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
+@show be1
+@show be2
+@show becube
+
+err = MPM.error_points(mymh_a.db, mymh_b.db, [tst_data; tst_datab], [zeros(size(tst_data,1)), ones(size(tst_datab,1))]) 
+println("holdout error: $err")
 
 ######################################################################
 # Plotting
@@ -155,90 +182,6 @@ obj_b = MPM.MPMCls(prior, datab, deepcopy(start), pmoves, 10.0)
 #plot(data[:,1], data[:,2], "g.", alpha=0.8)
 #plot(datab[:,1], datab[:,2], "r.", alpha=0.8)
 
-gext = [0,30.0,0,30]
-n1, n2, xstride, ystride, grid = MPM.gen_grid(gext, 30)
-
-println("")
-println("New moments:")
-bes = Float64[]
-bee2s = Float64[]
-brmses = Float64[]
-
-becubes = Float64[]
-becubese = Float64[]
-
-g1 = MPM.calc_g(grid, mymh_a.db, 20)
-g2 = MPM.calc_g(grid, mymh_b.db, 20)
-
-########### bee_e_cubes testing ########
-for i=1:20
-    @time be = MPM.bee_e_naive(grid, mymh_a.db, mymh_b.db, 20, xstride*ystride)
-    push!(bes, be)
-
-    @time bec,err = MPM.bee_e_cube(mymh_a.db, mymh_b.db, 20, max=(30,30), abstol=0.005)
-    push!(becubes, bec)
-    push!(becubese, err)
-end
-@show std(bes), std(becubes), std(becubese)
-
-########### bee_moments testing ########
-#for i=1:20
-    #@time be,bee2 = MPM.bee_moments(grid, mymh_a.db, mymh_b.db, 20, xstride*ystride)
-    ##be,bee2 = MPM.bee_moments(grid, mymh_a.db, mymh_b.db, g1, g2, 20, xstride*ystride)
-    ##@show be,brmse,bee2
-    #push!(bes, be)
-    #push!(bee2s, bee2)
-    #push!(brmses, bee2 - be^2)
-#end
-#@show std(bes), std(bee2s), std(brmses)
-
-#println("")
-#@time be,brmse,bee2 = MPM.bee_moments(grid, mymh_a.db, mymh_b.db, 20, xstride*ystride)
-#@show be,brmse,bee2
-#println("")
-
-##### PROFILING ####
-#Profile.clear()
-#@profile MPM.calc_g(grid, mymh_a.db, 20)
-##@profile MPM.bee_moments(grid, mymh_a.db, mymh_b.db, 20, xstride*ystride)
-#Profile.print()
-#println("")
-#Profile.print(format=:flat)
-####################
-
-#max = (30,30)
-#println("")
-#println("Cubature:")
-#@time be,bmse,err = MPM.error_moments_cube(mymh_a.db, mymh_b.db, 20, max=max, abstol=0.01)
-
-#println("")
-#println("points:")
-#@time be2,bmse2 = MPM.error_moments_points(grid, mymh_a.db, mymh_b.db, 20, xstride*ystride)
-
-#println("")
-#println("individual points:")
-#@time g0,gg0 = MPM.calc_g_moments(grid, mymh_a.db, 20)
-#@time g1,gg1 = MPM.calc_g_moments(grid, mymh_b.db, 20)
-#@time effbe = MPM.e_error_eff(g0, g1, xstride*ystride)
-
-#println("")
-#println("Values:")
-#println("")
-#println("Cubature:")
-#@show (be,bmse),err
-
-#println("")
-#println("points:")
-#@show be2,bmse2
-
-#println("")
-#println("individual points:")
-#@show effbe
-
-err = MPM.error_points(mymh_a.db, mymh_b.db, [tst_data; tst_datab], [zeros(size(tst_data,1)), ones(size(tst_datab,1))]) 
-println("holdout error: $err")
-
-
 #gmin = min(gg0,gg1)
 #close("all")
 #figure()
@@ -265,29 +208,6 @@ println("holdout error: $err")
 #@time g0o = MPM.calc_g(grid, mymh_a.db, 20)
 #@time g1o = MPM.calc_g(grid, mymh_b.db, 20)
 #@show be2, be2test = MPM.e_error_eff(g0o, g1o, xstride*ystride)
-
-##### MAP #####
-#figure()
-#gavg = calc_g(grid, [mymh_a.mapvalue.curr], 500)
-#imshow(reshape(gavg,N,N)', extent=gext, aspect="equal", origin="lower")
-#colorbar()
-#contour(reshape(gavg,N,N)', extent=gext, aspect="equal", origin="lower")
-#plot(data[:,1], data[:,2], "g.", alpha=0.8)
-
-##### TRUE #####
-#truept = MPMParams(trumu, #mu :: Matrix{Float64}
-    #trucov, #sigma :: Matrix{Float64}
-    #ones(kmax), #w :: Vector{Float64}
-    #clamp(log(data'/10),-3.0,Inf), #lam :: Matrix{Float64}
-    #1, #k :: Int
-    #0.0) #Energy
-
-#figure()
-#gavg = calc_g(grid, [start], 500)
-#imshow(reshape(gavg,N,N)', extent=gext, aspect="equal", origin="lower")
-#colorbar()
-#contour(reshape(gavg,N,N)', extent=gext, aspect="equal", origin="lower")
-#plot(data[:,1], data[:,2], "g.", alpha=0.8)
 
 #g() = plot(tst_data[:,1]+rand(size(tst_data,1)), tst_data[:,2]+rand(size(tst_data,1)), "g.", alpha=0.3)
 #fa() = plot_traces(mymh_a.db, [:mu,:sigma,:lam,:energy])

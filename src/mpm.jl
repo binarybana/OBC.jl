@@ -4,6 +4,7 @@ using Stats
 using Distributions
 using OBC
 using Cubature
+using Iterators
 import OBC: propose, energy, reject
 include("utils.jl")
 
@@ -188,7 +189,7 @@ function energy(obj::MPMCls)
     for i in 1:size(obj.data,1)
         for j in 1:size(obj.data,2)
             accum -= logpdf(Poisson(obj.d[i] * exp(obj.curr.lam[j,i])), 
-                        round(obj.data[i,j])) #FIXME lam and data dimensions
+                        floor(obj.data[i,j])) #FIXME lam and data dimensions
         end
     end
     #priors
@@ -335,18 +336,49 @@ function bee_e_eff(g0, g1, volume)
     exp(logsum(min(g0,g1) .+ log(volume)))*0.5
 end
 
-function bee_e_naive(points, db1, db2, numlam, volume)
+function bee_e_grid(points, db1, db2, numlam, volume; dmean=10.0)
     # FIXME This is only valid for c=0.5
-    g1 = calc_g(points, db1, numlam)
-    g2 = calc_g(points, db2, numlam)
+    g1 = calc_g(points, db1, numlam, dmean=dmean)
+    g2 = calc_g(points, db2, numlam, dmean=dmean)
     bee_e_eff(g1,g2,volume)
 end
 
-function bee_e_cube(db1, db2, numlam; dmean=10.0, max=(10,10), abstol=0.01, maxevals=0)
+function bee_e_data(data, db1, db2, numlam; dmean=10.0)
+    # FIXME This is only valid for c=0.5
+    local volume, points, g1, g2
+    g1sum = g2sum = 0.0
+    factor = 0.0
+    D = size(data,2)
+    maxN = iround(20_000^(1/D))
+    trycount = 1
+    while max(abs(g1sum-1.0),abs(g2sum-1.0)) > 0.1
+        mins, maxs = get_bbox(data, factor=factor)
+        lens, steps, points = gen_grid(mins, maxs, maxN)
+        volume = prod(steps)
+        g1 = calc_g(points, db1, numlam, dmean=dmean)
+        g2 = calc_g(points, db2, numlam, dmean=dmean)
+        g1sum = exp(logsum(g1 .+ log(volume)))
+        g2sum = exp(logsum(g2 .+ log(volume)))
+        println("g1 sum: $g1sum")
+        println("g2 sum: $g2sum")
+        #println("steps: $steps")
+        #println(maxs, " ", size(points), " ", factor)
+        factor += 1.0
+        if trycount > 10
+            return -min(g1sum, g2sum)
+        else
+            trycount += 1
+        end
+    end
+    bee_e_eff(g1,g2,volume)
+end
+
+function bee_e_cube(data, db1, db2, numlam; dmean=10.0, abstol=0.03, maxevals=0)
     # FIXME This is only valid for c=0.5
     # Get the first moments using histories and adaptive integration by
     # calling Cubature.hquadrature_v with a function that evaluates the error
     # at multiple points at a time
+    mins, maxs = get_bbox(data, factor=2)
     assert(length(db1) == length(db2))
     global iters = 0
     global evals = 0
@@ -356,11 +388,12 @@ function bee_e_cube(db1, db2, numlam; dmean=10.0, max=(10,10), abstol=0.01, maxe
         numpts = size(points, 2)
         iters += 1
         evals += numpts
-        g1 = calc_g(points', db1, numlam)
-        g2 = calc_g(points', db2, numlam)
+        g1 = calc_g(points', db1, numlam, dmean=dmean)
+        g2 = calc_g(points', db2, numlam, dmean=dmean)
         vals[:] = exp(min(g1,g2))
     end
-    val, err = hcubature_v(error_1st, zeros(length(max)), max, abstol=abstol, maxevals=maxevals)
+    val, err = hcubature_v(error_1st, mins, maxs, abstol=abstol, maxevals=maxevals)
+    println("maxs: $maxs, mins: $mins")
     println("Cubature used $iters iterations, and $evals * numclasses evaluations")
     return val*0.5, err
 end
@@ -373,7 +406,7 @@ function calc_g(points, db, numlam; dmean=10.0)
     lams = Array(Float64, dims, numlam)
     llams = Array(Float64, dims, numlam)
     rlams = Array(Float64, dims, numlam)
-    points = points'
+    points = floor(points)'
     lgpoints = lgamma(points .+ 1)
     for i in 1:dblen # each draw of theta
         curr = db[i]
