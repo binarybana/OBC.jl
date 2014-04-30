@@ -227,6 +227,34 @@ function addifdirty(r::Region, state)
     end
 end
 
+function max_(r::Region, state) 
+    if length(state) == 0 && length(r.vals) != 0
+        push!(state, r)
+    elseif length(r.vals) != 0 && r.vals[1] > state[1].vals[1]
+        state[1] = r
+    end
+end
+
+function find_max(r::Region)
+    s = {}
+    dfs(max_, s, r)
+    s[1]
+end
+
+function find_min_containing(r::Region, pt)
+    while true
+        for n in r.subs
+            if all(0 .<= pt-n.mins .< n.len) 
+                r = n
+                if length(r.subs) == 0
+                    return r
+                end
+                break # out to while loop
+            end
+        end
+    end
+end
+
 function find_uneven_branch(r::Region)
     if length(r.subs[1].vals) != 0 # we are right above leaf nodes
         if r.subs[1].len == 1 # but we can't go lower
@@ -274,20 +302,51 @@ function intsum2(f::Function, maxs)
     count = 0
     while abs(tots[1]-1) > 0.01 && count < 100 #maximum(tots[1:2])
         count += 1
-        # find good one
-        stdcurr, curr = find_uneven_branch(r)
-        println("Chose a branch with std: $stdcurr, branch: $curr")
-        # subdivide a few times
-        subdivide!(curr)
-        #subdivide!(curr)
-        # compute again
+        #get max from dirtylist
+        maxr = find_max(r)
+        #println(maxr)
+        #println(maxr.vals)
+        #get regions in other 2^D-1 directions from max
+        others = Array(Any, 2^D-1)
+        resize!(others, 0)
+        for c in Counter(zeros(D).+2)
+            newloc = (c .- 1) .* 2 .-1 .+ maxr.mins
+            push!(others, newloc)
+        end
+        #println(others)
+
+        #subdivide these other regions
+        rs = map(others) do x
+            find_min_containing(r, x)
+        end
+
+        map(subdivide!, rs)
+        map(subdivide!, rs)
         dirtylist = ({}, {})
-        dfs(addifdirty, dirtylist, curr, true)
+        dfs(addifdirty, dirtylist, r, true)
         f(dirtylist)
         fill!(tots, 0.0)
         dfs(treesum, tots, r, true)
         println("Tots estimate: $tots")
     end
+
+    #count = 0
+    #while abs(tots[1]-1) > 0.01 && count < 100 #maximum(tots[1:2])
+        #count += 1
+        ## find good one
+        #stdcurr, curr = find_uneven_branch(r)
+        #println("Chose a branch with std: $stdcurr, branch: $curr")
+        ## subdivide a few times
+        #subdivide!(curr)
+        ##subdivide!(curr)
+        ## compute again
+        #dirtylist = ({}, {})
+        #dfs(addifdirty, dirtylist, curr, true)
+        #f(dirtylist)
+        #fill!(tots, 0.0)
+        #dfs(treesum, tots, r, true)
+        #println("Tots estimate: $tots")
+    #end
     tots, r
 end
 
@@ -295,7 +354,7 @@ end
 #@show closest_grid_loc([1,15,25], 30)
 #@show closest_grid_loc([60,59,61,32], 30)
 
-const rate = 60
+const rate = 512
 iters = 0
 evals = 0
 function f(x, vals)
@@ -307,7 +366,7 @@ function f(x, vals)
 end
 
 function ftree(x)
-    println("Computing fvals for $(x[1])")
+    #println("Computing fvals for $(x[1])")
     global iters,evals
     iters += 1
     evals += length(x[1])
@@ -324,36 +383,36 @@ feasy(x) = (v = zeros(size(x)...); f(x,v); sum(v))
 #subdivide!(rtest)
 
 
-upp = 128
-D = 2
+upp = 1000
+D = 4
 println("####################")
-#@time tot1,r = intsum2(ftree, zeros(D).+upp)
-#iters = 0
-#evals = 0
-#@time tot2,r = intsum2(ftree, zeros(D).+upp)
-#@show tot1, tot2
+@time tot1,r = intsum2(ftree, zeros(D).+upp)
 iters = 0
 evals = 0
-@time tot,r = intsum2(ftree, zeros(D).+upp)
-@show tot
+@time tot2,r = intsum2(ftree, zeros(D).+upp)
+@show tot1, tot2
+#iters = 0
+#evals = 0
+#@time tot,r = intsum2(ftree, zeros(D).+upp)
+#@show tot
 println("With $iters iters and $evals fun evals")
 
-allnodes = collect(r)
+#allnodes = collect(r)
 
-using PyPlot
-close("all")
-figure()
-for n in allnodes
-    if length(n.vals)!=0
-        plot(n.mins[1], n.mins[2], "g.")
-    end
-end
-grid = gen_unit_grid(zeros(D), zeros(D).+upp.-1)
+#using PyPlot
+#close("all")
+#figure()
+#for n in allnodes
+    #if length(n.vals)!=0
+        #plot(n.mins[1], n.mins[2], "g.")
+    #end
+#end
+#grid = gen_unit_grid(zeros(D), zeros(D).+upp.-1)
 
-vals = zeros(size(grid,1))
-f(grid',vals)
+#vals = zeros(size(grid,1))
+#f(grid',vals)
 
-imshow(reshape(vals,upp,upp), origin="lower")
+#imshow(reshape(vals,upp,upp), origin="lower")
 
 
 #println("####################")
