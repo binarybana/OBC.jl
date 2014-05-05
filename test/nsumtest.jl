@@ -1,5 +1,5 @@
 using Distributions
-reload("src/IntSum.jl")
+reload("src/nsum.jl")
 
 #@show closest_grid_loc([1,2,3], 30)
 #@show closest_grid_loc([1,15,25], 30)
@@ -30,17 +30,17 @@ end
 
 feasy(x) = (v = zeros(size(x)...); f(x,v); sum(v))
 
-rtest = IntSum.Region(3, 512)
-subdivide!(rtest)
+rtest = NSum.Region(3, 512)
+NSum.subdivide!(rtest)
 
 
 upp = 2000
 D = 3
 println("####################")
-@time tot1,r = IntSum.isum(ftree, zeros(D).+upp)
+@time tot1,r = NSum.nsum(ftree, zeros(D).+upp)
 iters = 0
 evals = 0
-@time tot2,r = IntSum.isum(ftree, zeros(D).+upp)
+@time tot2,r = NSum.nsum(ftree, zeros(D).+upp)
 @show tot1, tot2
 #iters = 0
 #evals = 0
@@ -48,22 +48,22 @@ evals = 0
 #@show tot
 println("With $iters iters and $evals fun evals")
 
-#allnodes = collect(r)
+allnodes = collect(r)
 
-#using PyPlot
-#close("all")
-#figure()
-#for n in allnodes
-    #if length(n.vals)!=0
-        #plot(n.mins[1], n.mins[2], "g.")
-    #end
-#end
-#grid = gen_unit_grid(zeros(D), zeros(D).+upp.-1)
+using PyPlot
+close("all")
+figure()
+for n in allnodes
+    if length(n.vals)!=0
+        plot(n.mins[1], n.mins[2], "g.")
+    end
+end
+grid = NSum.gen_unit_grid(zeros(D), zeros(D).+upp.-1)
 
-#vals = zeros(size(grid,1))
-#f(grid',vals)
+vals = zeros(size(grid,1))
+f(grid',vals)
 
-#imshow(reshape(vals,upp,upp), origin="lower")
+imshow(reshape(vals,upp,upp), origin="lower")
 
 
 #using Cubature

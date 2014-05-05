@@ -1,4 +1,4 @@
-module IntSum
+module NSum
 
 using Iterators
 using Grid
@@ -7,7 +7,7 @@ using Grid
 #using Distributions
 import Base: ndims, show, length, collect
 
-export isum
+export nsum
 
 type Region{K}
     mins::Vector{Int}
@@ -149,15 +149,12 @@ function find_min_containing(r::Region, pt)
 end
 
 function find_uneven_branch(r::Region)
-    if length(r.subs[1].vals) != 0 # we are right above leaf nodes
-        if r.subs[1].len == 1 # but we can't go lower
+    if length(r.vals) != 0 # we are a leaf node
+        if r.subs[1].len == 2 # but we can't go lower
             return(-Inf, r)
         else
             # Get a measure of discrepancy:
-            vals = [x.vals[1] for x=r.subs]
-            ind = indmax(vals)
-            #return (std(vals), r.subs[ind])
-            return (sum(vals), r)
+            return (abs(r.vals[1] - r.mvals[1]), r)
         end
     else # we are still high, so we need to recurse downwards
         # return maximum discrepancy branch:
@@ -167,7 +164,7 @@ function find_uneven_branch(r::Region)
     end
 end
 
-function isum(f::Function, maxs; abstol=0.01, maxevals=30)
+function nsum(f::Function, maxs; abstol=0.01, maxevals=30)
     #pseudocode:
     #create octree using closest larger point to maxs
     #subdivide a few times, adding points to evaluate to dirty list
