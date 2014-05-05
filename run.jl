@@ -1,6 +1,4 @@
 reload("src/OBC.jl")
-reload("src/mpm.jl")
-#using OBC, MPM
 using PyPlot
 using Distributions
 
@@ -138,9 +136,11 @@ OBC.sample(mymh_b,10000)
 @time be1 = MPM.bee_e_data(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
 @time be2 = MPM.bee_e_data(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
 @time becube = MPM.bee_e_cube(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
+@time beis = MPM.bee_e_intsum(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
 @show be1
 @show be2
 @show becube
+@show beis
 
 err = MPM.error_points(mymh_a.db, mymh_b.db, [tst_data; tst_datab], [zeros(size(tst_data,1)), ones(size(tst_datab,1))]) 
 println("holdout error: $err")
@@ -149,30 +149,23 @@ println("holdout error: $err")
 # Plotting
 ######################################################################
 
-#include("src/plot_utils.jl")
-#n1, n2, gext, grid = get_grid(tst_data)
-#n1, n2, gext, grid = gen_grid([0,10.0,0,10])
+include("src/plot_utils.jl")
+mins, maxs, (lens, steps, grid) = MPM.get_grid(vcat(data,datab))
 
-#gavg,lams = calc_g(grid, [start], 1000)
-#imshow(reshape(gavg,N,N), extent=gext, aspect="equal", origin="lower")
-#colorbar()
-#plot(data[:,1], data[:,2], "g.", alpha=0.8)
-#plot(10*exp(lams[1,:]), 10*exp(lams[2,:]), "k.")
+close("all")
 
-#close("all")
-
-#ga = calc_g(grid, mymh_a.db, 20)
-#imshow(reshape(ga,n1,n2)', extent=gext, aspect="equal", origin="lower")
-#colorbar()
+ga = MPM.calc_g(grid, mymh_a.db, 20)
+imshow(reshape(ga,lens...)', extent=[mins[1],maxs[1],mins[2],maxs[2]], aspect="equal", origin="lower")
+colorbar()
 #contour(reshape(ga,n1,n2)', extent=gext, aspect="equal", origin="lower")
 #plot(data[:,1], data[:,2], "g.", alpha=0.8)
 
-#figure()
-#gb = calc_g(grid, mymh_b.db, 20)
-#imshow(reshape(gb,n1,n2)', extent=gext, aspect="equal", origin="lower")
-#colorbar()
-#contour(reshape(gb,n1,n2)', extent=gext, aspect="equal", origin="lower")
-#plot(datab[:,1], datab[:,2], "m.", alpha=0.8)
+allnodes = collect(beis[2])
+for n in allnodes
+    if length(n.vals)!=0
+        plot(n.mins[1], n.mins[2], "g.")
+    end
+end
 
 #figure()
 #gavg = ga - gb
@@ -181,33 +174,6 @@ println("holdout error: $err")
 #contour(reshape(gavg,n1,n2)', (0.0,), extent=gext, aspect="equal", origin="lower")
 #plot(data[:,1], data[:,2], "g.", alpha=0.8)
 #plot(datab[:,1], datab[:,2], "r.", alpha=0.8)
-
-#gmin = min(gg0,gg1)
-#close("all")
-#figure()
-#N=n1
-#imshow(reshape(gmin,N,N)', extent=gext, aspect="equal", origin="lower")
-#contour(reshape(gmin,N,N)', extent=gext, aspect="equal", origin="lower")
-#plot(data[:,1], data[:,2], "g.", alpha=0.8)
-#plot(datab[:,1], datab[:,2], "r.", alpha=0.8)
-
-#figure()
-#gmin = exp(min(g0,g1))
-#imshow(reshape(gmin,N,N)', extent=gext, aspect="equal", origin="lower")
-#contour(reshape(gmin,N,N)', extent=gext, aspect="equal", origin="lower")
-#plot(data[:,1], data[:,2], "g.", alpha=0.8)
-#plot(datab[:,1], datab[:,2], "r.", alpha=0.8)
-
-#figure()
-#gmin = g0 .- g1
-#imshow(reshape(gmin,N,N)', extent=gext, aspect="equal", origin="lower")
-#contour(reshape(gmin,N,N)', levels = [0.0], extent=gext, aspect="equal", origin="lower")
-#plot(tst_data[:,1], tst_data[:,2], "g.", alpha=0.8)
-#plot(tst_datab[:,1], tst_datab[:,2], "r.", alpha=0.8)
-
-#@time g0o = MPM.calc_g(grid, mymh_a.db, 20)
-#@time g1o = MPM.calc_g(grid, mymh_b.db, 20)
-#@show be2, be2test = MPM.e_error_eff(g0o, g1o, xstride*ystride)
 
 #g() = plot(tst_data[:,1]+rand(size(tst_data,1)), tst_data[:,2]+rand(size(tst_data,1)), "g.", alpha=0.3)
 #fa() = plot_traces(mymh_a.db, [:mu,:sigma,:lam,:energy])

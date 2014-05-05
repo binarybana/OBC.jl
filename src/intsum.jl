@@ -2,10 +2,12 @@ module IntSum
 
 using Iterators
 using Grid
-using Cubature
-using Base.Collections
-using Distributions
+#using Cubature
+#using Base.Collections
+#using Distributions
 import Base: ndims, show, length, collect
+
+export intsum2
 
 function gen_grid(mins, maxs, N=30)
     D = length(mins)
@@ -118,17 +120,18 @@ function intsum(f::Function, mins, maxs)
 end
 
 type Region{K}
-    #mins :: NTuple{K,Int}
     mins::Vector{Int}
     vals::Vector{Float64}
-    #subs :: NTuple{K,Region{K}}
+    mvals::Vector{Float64}
     subs::Vector{Region{K}}
+    #mins :: NTuple{K,Int}
+    #subs :: NTuple{K,Region{K}}
     level::Int
     len::Int
 end
 
-Region(k, len) = Region{k}(zeros(k), [], [], 1, len)
-Region(k, len, mins) = Region{k}(mins, [], [], 1, len)
+Region(k, len) = Region{k}(zeros(k), [], [], [], 1, len)
+Region(k, len, mins) = Region{k}(mins, [], [], [], 1, len)
 
 ndims{K}(::Type{Region{K}}) = K
 ndims(r::Region) = ndims(typeof(r))
@@ -155,8 +158,8 @@ function show(io::IO, r::Region)
 end
 
 function subdivide!{K}(r::Region{K})
-    if r.len == 1
-        warn("Trying to subdivide a unit region!")
+    if r.len == 2
+        warn("Trying to subdivide a 'unit' region!")
     elseif length(r.subs)>0
         for sub in r.subs
             subdivide!(sub)
@@ -166,10 +169,12 @@ function subdivide!{K}(r::Region{K})
         for c in Counter(zeros(K).+2)
             newmin = (c .- 1)*div(r.len,2) .+ r.mins
             newr = Region{K}(newmin, sum(c)==K ? r.vals : [], 
+                sum(c)==K ? r.mvals : [], 
                 [], r.level+1, div(r.len,2))
             push!(r.subs, newr)
         end
         r.vals = []
+        r.mvals = []
     end
     nothing
 end
@@ -206,27 +211,25 @@ length(r::Region) = (state = {0}; dfs(length_, state, r); state[1])
 maxdepth(r::Region) = (state = {0}; dfs(maxdepth_, state, r); state[1])
 minlen(r::Region) = (state = {typemax(Int)}; dfs(minlen_, state, r); state[1])
 
-function treesum(r::Region)
-    if length(r.vals)!=0
-        return r.vals
-    else
-        s = zeros(1)
-        dfs(treesum, s, r, true)
-        return s
-    end
+function treesum(r::Region, dims)
+    s = zeros(dims)
+    dfs(treesum_, s, r, true)
+    return s
 end
 
-function treesum(r::Region, state) 
-    state[:] = state .+ r.vals .* r.len^ndims(r)
+function treesum_(r::Region, state) 
+    volume = r.len^ndims(r)
+    state[:] = state .+ (r.mvals .+ r.vals)./2 .* volume
 end
 
 function addifdirty(r::Region, state) 
     if length(r.vals) == 0
-        push!(state[1], r.mins)
-        push!(state[2], r.vals)
+        push!(state[1], r.mins, r.mins .+ r.len/2)
+        push!(state[2], r.vals, r.mvals)
     end
 end
 
+# FIXME: Not updated for mvals yet
 function max_(r::Region, state) 
     if length(state) == 0 && length(r.vals) != 0
         push!(state, r)
@@ -274,19 +277,18 @@ function find_uneven_branch(r::Region)
     end
 end
 
-function intsum2(f::Function, maxs)
+function intsum2(f::Function, maxs; abstol=0.01, maxevals=30)
     #pseudocode:
     #create octree using closest larger point to maxs
     #subdivide a few times, adding points to evaluate to dirty list
     #evaluate in batch
     #update region values
-    #
     D = length(maxs)
     len = nextpow2(maximum(iround(maxs)))
     r = Region(D, len)
     subdivide!(r)
     subdivide!(r)
-    subdivide!(r)
+    #subdivide!(r)
     #subdivide!(r)
     #subdivide!(r)
     
@@ -300,17 +302,18 @@ function intsum2(f::Function, maxs)
     println("current estimate: $tots")
 
     count = 0
-    while abs(tots[1]-1) > 0.01 && count < 100 #maximum(tots[1:2])
+    while abs(tots[1]-1) > abstol && count < maxevals #maximum(tots[1:2])
+        println("Finding max")
         count += 1
         #get max from dirtylist
         maxr = find_max(r)
-        #println(maxr)
-        #println(maxr.vals)
+
         #get regions in other 2^D-1 directions from max
         others = Array(Any, 2^D-1)
         resize!(others, 0)
         for c in Counter(zeros(D).+2)
             newloc = (c .- 1) .* 2 .-1 .+ maxr.mins
+            any(newloc .< 0) && continue
             push!(others, newloc)
         end
         #println(others)
@@ -321,32 +324,17 @@ function intsum2(f::Function, maxs)
         end
 
         map(subdivide!, rs)
-        map(subdivide!, rs)
+        #map(subdivide!, rs)
         dirtylist = ({}, {})
         dfs(addifdirty, dirtylist, r, true)
-        f(dirtylist)
+        
+        if length(dirtylist[2])>0
+            f(dirtylist)
+        end
         fill!(tots, 0.0)
-        dfs(treesum, tots, r, true)
+        dfs(treesum_, tots, r, true)
         println("Tots estimate: $tots")
     end
-
-    #count = 0
-    #while abs(tots[1]-1) > 0.01 && count < 100 #maximum(tots[1:2])
-        #count += 1
-        ## find good one
-        #stdcurr, curr = find_uneven_branch(r)
-        #println("Chose a branch with std: $stdcurr, branch: $curr")
-        ## subdivide a few times
-        #subdivide!(curr)
-        ##subdivide!(curr)
-        ## compute again
-        #dirtylist = ({}, {})
-        #dfs(addifdirty, dirtylist, curr, true)
-        #f(dirtylist)
-        #fill!(tots, 0.0)
-        #dfs(treesum, tots, r, true)
-        #println("Tots estimate: $tots")
-    #end
     tots, r
 end
 
@@ -354,48 +342,48 @@ end
 #@show closest_grid_loc([1,15,25], 30)
 #@show closest_grid_loc([60,59,61,32], 30)
 
-const rate = 512
-iters = 0
-evals = 0
-function f(x, vals)
-    global iters,evals
-    iters += 1
-    evals += length(vals)
-    pdfs = pdf(Poisson(rate), floor(vec(x)))
-    vals[:] = vec(prod(reshape(pdfs,size(x)...), 1))
-end
+#const rate = 430
+#iters = 0
+#evals = 0
+#function f(x, vals)
+    #global iters,evals
+    #iters += 1
+    #evals += length(vals)
+    #pdfs = pdf(Poisson(rate), floor(vec(x)))
+    #vals[:] = vec(prod(reshape(pdfs,size(x)...), 1))
+#end
 
-function ftree(x)
-    #println("Computing fvals for $(x[1])")
-    global iters,evals
-    iters += 1
-    evals += length(x[1])
-    for (pt,vals)=zip(x...)
-        assert(length(vals) == 0)
-        pdfs = pdf(Poisson(rate), pt)
-        push!(vals, prod(pdfs))
-    end
-end
+#function ftree(x)
+    ##println("Computing fvals for $(x[1])")
+    #global iters,evals
+    #iters += 1
+    #evals += length(x[1])
+    #for (pt,vals)=zip(x...)
+        #assert(length(vals) == 0)
+        #pdfs = pdf(Poisson(rate), pt)
+        #push!(vals, prod(pdfs))
+    #end
+#end
 
-feasy(x) = (v = zeros(size(x)...); f(x,v); sum(v))
+#feasy(x) = (v = zeros(size(x)...); f(x,v); sum(v))
 
 #rtest = Region(3, 512)
 #subdivide!(rtest)
 
 
-upp = 1000
-D = 4
-println("####################")
-@time tot1,r = intsum2(ftree, zeros(D).+upp)
-iters = 0
-evals = 0
-@time tot2,r = intsum2(ftree, zeros(D).+upp)
-@show tot1, tot2
+#upp = 2000
+#D = 3
+#println("####################")
+#@time tot1,r = intsum2(ftree, zeros(D).+upp)
 #iters = 0
 #evals = 0
-#@time tot,r = intsum2(ftree, zeros(D).+upp)
-#@show tot
-println("With $iters iters and $evals fun evals")
+#@time tot2,r = intsum2(ftree, zeros(D).+upp)
+#@show tot1, tot2
+##iters = 0
+##evals = 0
+##@time tot,r = intsum2(ftree, zeros(D).+upp)
+##@show tot
+#println("With $iters iters and $evals fun evals")
 
 #allnodes = collect(r)
 

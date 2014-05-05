@@ -3,6 +3,7 @@ module MPM
 using Stats
 using Distributions
 using OBC
+include("intsum.jl")
 using Cubature
 using Iterators
 import OBC: propose, energy, reject
@@ -371,6 +372,35 @@ function bee_e_data(data, db1, db2, numlam; dmean=10.0)
         end
     end
     bee_e_eff(g1,g2,volume)
+end
+
+function bee_e_intsum(data, db1, db2, numlam; dmean=10.0, abstol=0.03, maxevals=30)
+    # FIXME This is only valid for c=0.5
+    mins, maxs = get_bbox(data, factor=2)
+    assert(length(db1) == length(db2))
+    global iters = 0
+    global evals = 0
+    function error_1st(data)
+        points, vals = data
+        tabpoints = hcat(points...)
+        #points: dxn array to evaluate at
+        #vals: 2xn values to store into
+        numpts = length(points)
+        iters += 1
+        evals += numpts
+        g1 = calc_g(tabpoints', db1, numlam, dmean=dmean)
+        g2 = calc_g(tabpoints', db2, numlam, dmean=dmean)
+        errpts = exp(min(g1,g2))
+        for i=1:numpts
+            resize!(vals[i], 2)
+            vals[i][1] = exp(g1[i])
+            vals[i][2] = errpts[i]
+        end
+    end
+    tot1,r = IntSum.intsum2(error_1st, maxs, abstol=abstol, maxevals=maxevals)
+    println("maxs: $maxs")
+    println("IntSum used $iters iterations, and $evals * numclasses evaluations")
+    return tot1, r
 end
 
 function bee_e_cube(data, db1, db2, numlam; dmean=10.0, abstol=0.03, maxevals=0)
