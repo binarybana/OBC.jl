@@ -59,9 +59,14 @@ function subdivide!{K}(r::Region{K})
         sizehint(r.subs, 2^ndims(r))
         for c in Counter(zeros(K).+2)
             newmin = (c .- 1)*div(r.len,2) .+ r.mins
-            newr = Region{K}(newmin, sum(c)==K ? r.vals : [], 
-                sum(c)==K ? r.mvals : [], 
-                [], r.level+1, div(r.len,2))
+            newr = nothing
+            if sum(c) == K
+                newr = Region{K}(newmin, r.vals, [], [], r.level+1, div(r.len,2))
+            elseif sum(c) == K*2
+                newr = Region{K}(newmin, r.mvals, [], [], r.level+1, div(r.len,2))
+            else
+                newr = Region{K}(newmin, [], [], [], r.level+1, div(r.len,2))
+            end
             push!(r.subs, newr)
         end
         r.vals = []
@@ -115,8 +120,12 @@ end
 
 function addifdirty(r::Region, state) 
     if length(r.vals) == 0
-        push!(state[1], r.mins, r.mins .+ r.len/2)
-        push!(state[2], r.vals, r.mvals)
+        push!(state[1], r.mins)
+        push!(state[2], r.vals)
+    end
+    if length(r.mvals) == 0
+        push!(state[1], r.mins .+ r.len/2)
+        push!(state[2], r.mvals)
     end
 end
 
