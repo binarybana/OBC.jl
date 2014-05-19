@@ -3,7 +3,7 @@ module MPM
 using Stats
 using Distributions
 using OBC
-include("intsum.jl")
+include("nsum.jl")
 using Cubature
 using Iterators
 import OBC: propose, energy, reject
@@ -168,8 +168,15 @@ function propose(obj::MPMCls)
         #curr.d = clamp(curr.d + randn(self.n) * 0.2, 8,12) #FIXME 
 
         #Modify covariances
+        #temp = curr.sigma .* (0.5 .+ rand(prior.D, prior.D)) #.* curr.sigma ./ mean(curr.sigma)
+        #temp = curr.sigma .+ diagm(abs(clamp(diag(curr.sigma),0.001,Inf)) .* (rand(prior.D).-0.5))
+        #temp = (temp'*temp).^(1/2)
+        #if isposdef(temp) && false #rand(1:100) > 2
+            #curr.sigma = temp
+        #else
         curr.sigma = rand(InverseWishart(propmoves.priorkappa, 
-                        curr.sigma*(propmoves.priorkappa-1-prior.D)))
+                curr.sigma*(propmoves.priorkappa-1-prior.D)))
+        #end
 
         for i in 1:length(curr.lam) 
             curr.lam[i] += randn() * propmoves.lammove
@@ -352,6 +359,7 @@ function bee_e_data(data, db1, db2, numlam; dmean=10.0)
     D = size(data,2)
     maxN = iround(20_000^(1/D))
     trycount = 1
+    numpts = 0
     while max(abs(g1sum-1.0),abs(g2sum-1.0)) > 0.1
         mins, maxs = get_bbox(data, factor=factor)
         lens, steps, points = gen_grid(mins, maxs, maxN)
@@ -362,6 +370,7 @@ function bee_e_data(data, db1, db2, numlam; dmean=10.0)
         g2sum = exp(logsum(g2 .+ log(volume)))
         println("g1 sum: $g1sum")
         println("g2 sum: $g2sum")
+        numpts += length(points)
         #println("steps: $steps")
         #println(maxs, " ", size(points), " ", factor)
         factor += 1.0
@@ -371,10 +380,11 @@ function bee_e_data(data, db1, db2, numlam; dmean=10.0)
             trycount += 1
         end
     end
+    println("bee_e_data used $trycount iterations, and $numpts * numclasses evaluations")
     bee_e_eff(g1,g2,volume)
 end
 
-function bee_e_intsum(data, db1, db2, numlam; dmean=10.0, abstol=0.03, maxevals=30)
+function bee_e_nsum(data, db1, db2, numlam; dmean=10.0, abstol=0.03, maxevals=30)
     # FIXME This is only valid for c=0.5
     mins, maxs = get_bbox(data, factor=2)
     assert(length(db1) == length(db2))
@@ -397,9 +407,10 @@ function bee_e_intsum(data, db1, db2, numlam; dmean=10.0, abstol=0.03, maxevals=
             vals[i][2] = errpts[i]
         end
     end
-    tot1,r = IntSum.intsum2(error_1st, maxs, abstol=abstol, maxevals=maxevals)
-    println("maxs: $maxs")
-    println("IntSum used $iters iterations, and $evals * numclasses evaluations")
+    tot1,r = NSum.nsum(2, error_1st, maxs, abstol=abstol, maxevals=maxevals)
+    #println("maxs: $maxs")
+    #println("NSum used $iters iterations, and $evals * numclasses evaluations")
+    tot1[2:end] /= 2
     return tot1, r
 end
 

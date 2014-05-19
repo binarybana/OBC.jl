@@ -73,74 +73,83 @@ end
 kmax = 1
 D = 2
 
-######################################################################
-# Class 0
-######################################################################
+#for i=1:3
+    tic()
+    ######################################################################
+    # Class 0
+    ######################################################################
 
-#trumu, trucov, data, tst_data = gen_data_jason(0.0)
-tst_data = rand(510,D) .+ 10
-#tst_data[:,1] .+= 0
-tst_data[:,1] = rand(0:1, 510)
-data = tst_data[1:10,:]
+    #trumu, trucov, data, tst_data = gen_data_jason(0.0)
+    tst_data = rand(510,D) .* 500 .+ 8
+    tst_data[:,1] = 0
+    #tst_data[:,1] = rand(0:1, 510)
+    data = tst_data[1:10,:]
 
-cov = eye(D,D) 
-#cov = [0.5 -0.2; -0.2 1.0]
-mu = ones(D,kmax)
-#mu = [1.6 -1.0; 1.6 -1.0]
-#mu = [0.2 0.2]'
-prior = MPM.MPMPrior(D=D, kmax=kmax, kappa=10.)
-start = MPM.MPMParams(mu, #mu :: Matrix{Float64}
-    cov, #sigma :: Matrix{Float64}
-    ones(kmax)/kmax, #w :: Vector{Float64}
-    clamp(log(data'/10),-8.0,Inf), #lam :: Matrix{Float64}
-    1) #k :: Int
+    cov = eye(D,D) .* 0.1
+    #cov = [0.5 -0.2; -0.2 1.0]
+    mu = ones(D,kmax)
+    #mu = [1.6 -1.0; 1.6 -1.0]
+    #mu = [0.2 0.2]'
+    prior = MPM.MPMPrior(D=D, kmax=kmax, kappa=10.)
+    start = MPM.MPMParams(mu, #mu :: Matrix{Float64}
+        cov, #sigma :: Matrix{Float64}
+        ones(kmax)/kmax, #w :: Vector{Float64}
+        clamp(log(data'/10),-8.0,Inf), #lam :: Matrix{Float64}
+        1) #k :: Int
 
-pmoves = MPM.MPMPropMoves()
-pmoves.lammove = 0.01
-pmoves.mumove = 0.1
-pmoves.priorkappa = 100.0
+    pmoves = MPM.MPMPropMoves()
+    pmoves.lammove = 0.01
+    pmoves.mumove = 0.1
+    pmoves.priorkappa = 100.0
 
-obj_a = MPM.MPMCls(prior, data, deepcopy(start), pmoves, 10.0)
-obj_a.usepriors = true
+    obj_a = MPM.MPMCls(prior, data, deepcopy(start), pmoves, 10.0)
+    obj_a.usepriors = false
 
-mymh_a = OBC.MHRecord(obj_a,burn=1000,thin=50)
-sample(mymh_a,10000)
+    mymh_a = OBC.MHRecord(obj_a,burn=1000,thin=50)
+    @time OBC.sample(mymh_a,10000)
 
-######################################################################
-# Class 1
-######################################################################
+    ######################################################################
+    # Class 1
+    ######################################################################
 
-#trumub, trucovb, datab, tst_datab = gen_data_jason(-1.0)
-tst_datab = rand(510,D) .+ 10
-tst_datab[:,2] .+= 0.0
-tst_datab[:,1] = rand(0:1, 510)
-datab = tst_datab[1:10,:]
+    #trumub, trucovb, datab, tst_datab = gen_data_jason(-1.0)
+    tst_datab = rand(510,D) .* 500 .+ 8
+    tst_datab[:,2] = 0
+    #tst_datab[:,1] = rand(0:1, 510)
+    datab = tst_datab[1:10,:]
 
-start = MPM.MPMParams(mu, #mu :: Matrix{Float64}
-    cov, #sigma :: Matrix{Float64}
-    ones(kmax)/kmax, #w :: Vector{Float64}
-    clamp(log(datab'/10),-8.0,Inf), #lam :: Matrix{Float64}
-    1) #k :: Int
-obj_b = MPM.MPMCls(prior, datab, deepcopy(start), pmoves, 10.0)
+    start = MPM.MPMParams(mu, #mu :: Matrix{Float64}
+        cov, #sigma :: Matrix{Float64}
+        ones(kmax)/kmax, #w :: Vector{Float64}
+        clamp(log(datab'/10),-8.0,Inf), #lam :: Matrix{Float64}
+        1) #k :: Int
+    obj_b = MPM.MPMCls(prior, datab, deepcopy(start), pmoves, 10.0)
+    obj_b.usepriors = false
 
-mymh_b = OBC.MHRecord(obj_b,burn=1000,thin=50)
-OBC.sample(mymh_b,10000)
+    mymh_b = OBC.MHRecord(obj_b,burn=1000,thin=50)
+    @time OBC.sample(mymh_b,10000)
 
-#gext = [0,30.0,0,30]
-#n1, n2, xstride, ystride, grid = MPM.gen_grid(gext, 30)
-#gext, (n1, n2, xstride, ystride, grid) = MPM.get_grid(vcat(data,datab))
+    #gext = [0,30.0,0,30]
+    #n1, n2, xstride, ystride, grid = MPM.gen_grid(gext, 30)
+    #gext, (n1, n2, xstride, ystride, grid) = MPM.get_grid(vcat(data,datab))
 
-#g1 = MPM.calc_g(grid, mymh_a.db, 20)
-#g2 = MPM.calc_g(grid, mymh_b.db, 20)
+    #g1 = MPM.calc_g(grid, mymh_a.db, 20)
+    #g2 = MPM.calc_g(grid, mymh_b.db, 20)
 
-@time be1 = MPM.bee_e_data(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
-@time be2 = MPM.bee_e_data(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
-@time becube = MPM.bee_e_cube(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
-@time beis = MPM.bee_e_intsum(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
-@show be1
-@show be2
-@show becube
-@show beis
+    #@time be1 = MPM.bee_e_data(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
+    #@time be2 = MPM.bee_e_data(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
+    #@time becube = MPM.bee_e_cube(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
+    #@time becube = MPM.bee_e_cube(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
+    #@time beis,r = MPM.bee_e_nsum(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
+    #@time beis,r = MPM.bee_e_nsum(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
+    beis,r = MPM.bee_e_nsum(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
+    #@show be1
+    #@show be2
+    #@show becube
+    @show beis
+
+    toc()
+#end
 
 err = MPM.error_points(mymh_a.db, mymh_b.db, [tst_data; tst_datab], [zeros(size(tst_data,1)), ones(size(tst_datab,1))]) 
 println("holdout error: $err")
@@ -155,12 +164,13 @@ mins, maxs, (lens, steps, grid) = MPM.get_grid(vcat(data,datab))
 close("all")
 
 ga = MPM.calc_g(grid, mymh_a.db, 20)
+ga = exp(ga.-maximum(ga))
 imshow(reshape(ga,lens...)', extent=[mins[1],maxs[1],mins[2],maxs[2]], aspect="equal", origin="lower")
 colorbar()
 #contour(reshape(ga,n1,n2)', extent=gext, aspect="equal", origin="lower")
 #plot(data[:,1], data[:,2], "g.", alpha=0.8)
 
-allnodes = collect(beis[2])
+allnodes = collect(r)
 for n in allnodes
     if length(n.vals)!=0
         plot(n.mins[1], n.mins[2], "g.")
@@ -177,4 +187,5 @@ end
 
 #g() = plot(tst_data[:,1]+rand(size(tst_data,1)), tst_data[:,2]+rand(size(tst_data,1)), "g.", alpha=0.3)
 #fa() = plot_traces(mymh_a.db, [:mu,:sigma,:lam,:energy])
+fa() = plot_traces(mymh_a.db, [:sigma,:energy])
 #fb() = plot_traces(mymh_b.db, [:mu,:sigma,:lam,:energy])

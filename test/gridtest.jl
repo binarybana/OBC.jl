@@ -3,20 +3,6 @@ using Cubature
 using Distributions
 using Iterators
 
-function gen_grid(mins, maxs, N=30)
-    D = length(mins)
-    stepsizes = ceil(float(maxs .- mins) ./N)
-    ranges = [mins[i]:stepsizes[i]:maxs[i] for i=1:D]
-    grid = hcat(map(collect, collect(product(ranges...)))...)'
-    return map(length,ranges), stepsizes, grid
-end
-
-function gen_unit_grid(mins, maxs)
-    D = length(mins)
-    ranges = [mins[i]:maxs[i] for i=1:D]
-    hcat(map(collect, collect(product(ranges...)))...)'
-end
-
 iters = 0
 function f(x)
     global iters

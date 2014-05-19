@@ -1,11 +1,27 @@
 using Distributions
+#using Base.Collections
+using Iterators
 reload("src/nsum.jl")
 
 #@show closest_grid_loc([1,2,3], 30)
 #@show closest_grid_loc([1,15,25], 30)
 #@show closest_grid_loc([60,59,61,32], 30)
 
-const rate = 430
+function gen_grid(mins, maxs, N=30)
+    D = length(mins)
+    stepsizes = ceil(float(maxs .- mins) ./N)
+    ranges = [mins[i]:stepsizes[i]:maxs[i] for i=1:D]
+    grid = hcat(map(collect, Iterators.product(ranges...))...)'
+    return map(length,ranges), stepsizes, grid
+end
+
+function gen_unit_grid(mins, maxs)
+    D = length(mins)
+    ranges = [mins[i]:maxs[i] for i=1:D]
+    hcat(map(collect, Iterators.product(ranges...))...)'
+end
+
+const rate = 43
 iters = 0
 evals = 0
 function f(x, vals)
@@ -34,17 +50,17 @@ rtest = NSum.Region(3, 512)
 NSum.subdivide!(rtest)
 
 
-upp = 2000
-D = 3
+upp = 100
+D = 2
 println("####################")
-@time tot1,r = NSum.nsum(ftree, zeros(D).+upp)
+@time tot1,r = NSum.nsum(1, ftree, zeros(D).+upp, abstol=0.03)
 iters = 0
 evals = 0
-@time tot2,r = NSum.nsum(ftree, zeros(D).+upp)
+@time tot2,r = NSum.nsum(1, ftree, zeros(D).+upp, abstol=0.03)
 @show tot1, tot2
 #iters = 0
 #evals = 0
-#@time tot,r = IntSum.isum(ftree, zeros(D).+upp)
+#@time tot,r = IntSum.nsum(ftree, zeros(D).+upp)
 #@show tot
 println("With $iters iters and $evals fun evals")
 
@@ -58,12 +74,15 @@ for n in allnodes
         plot(n.mins[1], n.mins[2], "g.")
     end
 end
-grid = NSum.gen_unit_grid(zeros(D), zeros(D).+upp.-1)
+lens, steps, grid = gen_grid(zeros(D), zeros(D).+upp.-1, 50)
 
 vals = zeros(size(grid,1))
 f(grid',vals)
 
-imshow(reshape(vals,upp,upp), origin="lower")
+imshow(reshape(vals,lens...), extent=[0,upp,0,upp], origin="lower")
+
+## NOTE TO SELF: trying to get above code to work to verify that my new 
+# find uneven branch code with midpoint is working
 
 
 #using Cubature

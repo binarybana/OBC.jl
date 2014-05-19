@@ -49,7 +49,8 @@ end
 
 function subdivide!{K}(r::Region{K})
     if r.len == 2
-        warn("Trying to subdivide a 'unit' region!")
+        #warn("Trying to subdivide a 'unit' region!")
+        return nothing
     elseif length(r.subs)>0
         for sub in r.subs
             subdivide!(sub)
@@ -119,18 +120,26 @@ function addifdirty(r::Region, state)
     end
 end
 
-# FIXME: Not updated for mvals yet
 function max_(r::Region, state) 
-    if length(state) == 0 && length(r.vals) != 0
+    # Only valid for leaf nodes
+    if r.len == 2 # Ignore fully explored regions
+        return
+    end
+    if length(state) == 0
         push!(state, r)
-    elseif length(r.vals) != 0 && r.vals[1] > state[1].vals[1]
-        state[1] = r
+    else
+        k = length(r.mins)
+        tempr = max(r.vals[1], r.mvals[1]) * r.len^k
+        tempstate = max(state[1].vals[1], state[1].mvals[1]) * state[1].len^k
+        if tempr > tempstate
+            state[1] = r
+        end
     end
 end
 
 function find_max(r::Region)
     s = {}
-    dfs(max_, s, r)
+    dfs(max_, s, r, true)
     s[1]
 end
 
@@ -150,21 +159,22 @@ end
 
 function find_uneven_branch(r::Region)
     if length(r.vals) != 0 # we are a leaf node
-        if r.subs[1].len == 2 # but we can't go lower
-            return(-Inf, r)
+        if r.len == 2 # but we can't go lower
+            return(-Inf, [r])
         else
             # Get a measure of discrepancy:
-            return (abs(r.vals[1] - r.mvals[1]), r)
+            return (abs(r.vals[1] - r.mvals[1]), [r])
         end
     else # we are still high, so we need to recurse downwards
         # return maximum discrepancy branch:
         maxpaths = [find_uneven_branch(x) for x in r.subs]
         ind = indmax([x[1] for x in maxpaths])
+        push!(maxpaths[ind][2], r)
         return maxpaths[ind]
     end
 end
 
-function nsum(f::Function, maxs; abstol=0.01, maxevals=30)
+function nsum(fdim::Integer, f::Function, maxs; abstol=0.01, maxevals=30)
     #pseudocode:
     #create octree using closest larger point to maxs
     #subdivide a few times, adding points to evaluate to dirty list
@@ -175,43 +185,55 @@ function nsum(f::Function, maxs; abstol=0.01, maxevals=30)
     r = Region(D, len)
     subdivide!(r)
     subdivide!(r)
-    #subdivide!(r)
+    subdivide!(r)
     #subdivide!(r)
     #subdivide!(r)
     
     dirtylist = ({}, {})
     dfs(addifdirty, dirtylist, r, true)
     f(dirtylist)
-    tots = zero(1)
+    tots = zeros(fdim)
     for v in dirtylist[2]
         tots .+= v
     end
-    println("current estimate: $tots")
+    #println("current estimate: $tots")
 
     count = 0
-    while abs(tots[1]-1) > abstol && count < maxevals #maximum(tots[1:2])
-        println("Finding max")
+    findtype = 1
+    while abs(tots[1]-1) > abstol && count < maxevals
         count += 1
-        #get max from dirtylist
-        maxr = find_max(r)
 
-        #get regions in other 2^D-1 directions from max
-        others = Array(Any, 2^D-1)
-        resize!(others, 0)
-        for c in Counter(zeros(D).+2)
-            newloc = (c .- 1) .* 2 .-1 .+ maxr.mins
-            any(newloc .< 0) && continue
-            push!(others, newloc)
+        if findtype == 1
+            #println("Getting max")
+            #get max 
+            maxr = find_max(r)
+
+            #get regions in other 2^D-1 directions from max
+            #others = Array(Any, 2^D-1)
+            #resize!(others, 0)
+            #for c in Counter(zeros(D).+2)
+                #newloc = (c .- 1) .* 2 .-1 .+ maxr.mins
+                #any(newloc .< 0) && continue
+                #push!(others, newloc)
+            #end
+            ##println(others)
+
+            ##subdivide these other regions
+            #rs = map(others) do x
+                #find_min_containing(r, x)
+            #end
+            #map(subdivide!, rs)
+            #map(subdivide!, rs)
+            subdivide!(maxr)
+            findtype $= 1
+        else
+            dis, maxrs = find_uneven_branch(r)
+            maxr = maxrs[3]
+            #println("Found $dis discrepancy at pt $(maxr.mins) $(maxr.len)")
+            subdivide!(maxr)
+            findtype $= 1
         end
-        #println(others)
 
-        #subdivide these other regions
-        rs = map(others) do x
-            find_min_containing(r, x)
-        end
-
-        map(subdivide!, rs)
-        #map(subdivide!, rs)
         dirtylist = ({}, {})
         dfs(addifdirty, dirtylist, r, true)
         
@@ -220,8 +242,9 @@ function nsum(f::Function, maxs; abstol=0.01, maxevals=30)
         end
         fill!(tots, 0.0)
         dfs(treesum_, tots, r, true)
-        println("Tots estimate: $tots")
+        #println("Tots estimate: $tots")
     end
+    #println("Finished $count iters")
     tots, r
 end
 
