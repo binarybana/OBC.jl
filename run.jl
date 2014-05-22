@@ -114,7 +114,7 @@ D = 2
 
     #trumub, trucovb, datab, tst_datab = gen_data_jason(-1.0)
     tst_datab = rand(510,D) .* 500 .+ 8
-    tst_datab[:,2] = 0
+    tst_datab[:,1] = 2
     #tst_datab[:,1] = rand(0:1, 510)
     datab = tst_datab[1:10,:]
 
@@ -137,16 +137,17 @@ D = 2
     #g2 = MPM.calc_g(grid, mymh_b.db, 20)
 
     #@time be1 = MPM.bee_e_data(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
-    #@time be2 = MPM.bee_e_data(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
+    be2 = MPM.bee_e_data_grid(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
     #@time becube = MPM.bee_e_cube(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
     #@time becube = MPM.bee_e_cube(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
     #@time beis,r = MPM.bee_e_nsum(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
     #@time beis,r = MPM.bee_e_nsum(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
-    beis,r = MPM.bee_e_nsum(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
+    beis,r = MPM.bee_e_nsum(vcat(data,datab), mymh_a.db, mymh_b.db, 20, maxevals=100)
     #@show be1
     #@show be2
     #@show becube
     @show beis
+    @show be2
 
     toc()
 #end

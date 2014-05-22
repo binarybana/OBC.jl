@@ -351,7 +351,14 @@ function bee_e_grid(points, db1, db2, numlam, volume; dmean=10.0)
     bee_e_eff(g1,g2,volume)
 end
 
-function bee_e_data(data, db1, db2, numlam; dmean=10.0)
+function bee_e_data_grid(data, db1, db2, numlam; dmean=10.0)
+    mins,maxs = get_bbox(data)
+    lens,steps,points = gen_unit_grid(mins,maxs)
+    println("Num points: $(size(points)), maxs: $maxs")
+    bee_e_grid(points, db1, db2, numlam, prod(steps))
+end
+
+function bee_e_data(data, db1, db2, numlam; dmean=10.0, maxtry=10)
     # FIXME This is only valid for c=0.5
     local volume, points, g1, g2
     g1sum = g2sum = 0.0
@@ -374,7 +381,7 @@ function bee_e_data(data, db1, db2, numlam; dmean=10.0)
         #println("steps: $steps")
         #println(maxs, " ", size(points), " ", factor)
         factor += 1.0
-        if trycount > 10
+        if trycount > maxtry
             return -min(g1sum, g2sum)
         else
             trycount += 1
@@ -409,7 +416,7 @@ function bee_e_nsum(data, db1, db2, numlam; dmean=10.0, abstol=0.03, maxevals=30
     end
     tot1,r = NSum.nsum(2, error_1st, maxs, abstol=abstol, maxevals=maxevals)
     #println("maxs: $maxs")
-    #println("NSum used $iters iterations, and $evals * numclasses evaluations")
+    println("NSum used $iters iterations, and $evals * numclasses evaluations")
     tot1[2:end] /= 2
     return tot1, r
 end

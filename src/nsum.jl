@@ -12,7 +12,7 @@ export nsum
 type Region{K}
     mins::Vector{Int}
     vals::Vector{Float64}
-    mvals::Vector{Float64}
+    mvals::Vector{Vector{Float64}}
     subs::Vector{Region{K}}
     #mins :: NTuple{K,Int}
     #subs :: NTuple{K,Region{K}}
@@ -20,8 +20,8 @@ type Region{K}
     len::Int
 end
 
-Region(k, len) = Region{k}(zeros(k), [], [], [], 1, len)
-Region(k, len, mins) = Region{k}(mins, [], [], [], 1, len)
+Region(k, len) = Region{k}(zeros(k), [], {Float64[]}, [], 1, len)
+Region(k, len, mins) = Region{k}(mins, [], {Float64[]}, [], 1, len)
 
 ndims{K}(::Type{Region{K}}) = K
 ndims(r::Region) = ndims(typeof(r))
@@ -61,16 +61,16 @@ function subdivide!{K}(r::Region{K})
             newmin = (c .- 1)*div(r.len,2) .+ r.mins
             newr = nothing
             if sum(c) == K
-                newr = Region{K}(newmin, r.vals, [], [], r.level+1, div(r.len,2))
+                newr = Region{K}(newmin, r.vals, {Float64[]}, [], r.level+1, div(r.len,2))
             elseif sum(c) == K*2
-                newr = Region{K}(newmin, r.mvals, [], [], r.level+1, div(r.len,2))
+                newr = Region{K}(newmin, r.mvals[1], {Float64[]}, [], r.level+1, div(r.len,2))
             else
-                newr = Region{K}(newmin, [], [], [], r.level+1, div(r.len,2))
+                newr = Region{K}(newmin, [], {Float64[]}, [], r.level+1, div(r.len,2))
             end
             push!(r.subs, newr)
         end
-        r.vals = []
-        r.mvals = []
+        r.vals = Float64[]
+        r.mvals = {Float64[]}
     end
     nothing
 end
@@ -107,6 +107,8 @@ length(r::Region) = (state = {0}; dfs(length_, state, r); state[1])
 maxdepth(r::Region) = (state = {0}; dfs(maxdepth_, state, r); state[1])
 minlen(r::Region) = (state = {typemax(Int)}; dfs(minlen_, state, r); state[1])
 
+#function treesum{K<:Integer}(r::Region{K}, dims)
+#function treesum(r, dims)
 function treesum(r::Region, dims)
     s = zeros(dims)
     dfs(treesum_, s, r, true)
@@ -114,8 +116,13 @@ function treesum(r::Region, dims)
 end
 
 function treesum_(r::Region, state) 
-    volume = r.len^ndims(r)
-    state[:] = state .+ (r.mvals .+ r.vals)./2 .* volume
+    if r.len == 2
+        state[:] = reduce(.+, state, r.mvals)
+        state[:] = state .+ r.vals
+    else
+        volume = r.len^ndims(r)
+        state[:] = state .+ (r.mvals[1] .+ r.vals)./2 .* volume
+    end
 end
 
 function addifdirty(r::Region, state) 
@@ -123,9 +130,19 @@ function addifdirty(r::Region, state)
         push!(state[1], r.mins)
         push!(state[2], r.vals)
     end
-    if length(r.mvals) == 0
-        push!(state[1], r.mins .+ r.len/2)
-        push!(state[2], r.mvals)
+    if length(r.mvals[1]) == 0
+        if r.len == 2 # Add all points
+            empty!(r.mvals)
+            for c in Counter(zeros(ndims(r)).+2)
+                sum(c) == ndims(r) && continue # r.mins already handled in r.val
+                push!(state[1], r.mins .+ c .- 1)
+                push!(r.mvals, Float64[])
+                push!(state[2], r.mvals[end]) 
+            end
+        else # just midpoint
+            push!(state[1], r.mins .+ r.len/2)
+            push!(state[2], r.mvals[1])
+        end
     end
 end
 
@@ -138,8 +155,8 @@ function max_(r::Region, state)
         push!(state, r)
     else
         k = length(r.mins)
-        tempr = max(r.vals[1], r.mvals[1]) * r.len^k
-        tempstate = max(state[1].vals[1], state[1].mvals[1]) * state[1].len^k
+        tempr = max(r.vals[1], r.mvals[1][1]) * r.len^k
+        tempstate = max(state[1].vals[1], state[1].mvals[1][1]) * state[1].len^k # FIXME CHECK
         if tempr > tempstate
             state[1] = r
         end
@@ -149,6 +166,7 @@ end
 function find_max(r::Region)
     s = {}
     dfs(max_, s, r, true)
+    length(s) == 0 && return r # We've evaluated everything
     s[1]
 end
 
@@ -172,7 +190,7 @@ function find_uneven_branch(r::Region)
             return(-Inf, [r])
         else
             # Get a measure of discrepancy:
-            return (abs(r.vals[1] - r.mvals[1]), [r])
+            return (abs(r.vals[1] - r.mvals[1][1]), [r])
         end
     else # we are still high, so we need to recurse downwards
         # return maximum discrepancy branch:
@@ -216,6 +234,7 @@ function nsum(fdim::Integer, f::Function, maxs; abstol=0.01, maxevals=30)
             #println("Getting max")
             #get max 
             maxr = find_max(r)
+            r === maxr && break # Exhausted everything
 
             #get regions in other 2^D-1 directions from max
             #others = Array(Any, 2^D-1)
@@ -237,6 +256,7 @@ function nsum(fdim::Integer, f::Function, maxs; abstol=0.01, maxevals=30)
             findtype $= 1
         else
             dis, maxrs = find_uneven_branch(r)
+            dis === -Inf && break # Exhausted everything
             maxr = maxrs[3]
             #println("Found $dis discrepancy at pt $(maxr.mins) $(maxr.len)")
             subdivide!(maxr)
