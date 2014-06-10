@@ -1,6 +1,5 @@
 module NSum
 
-using Iterators
 using Grid
 #using Cubature
 #using Base.Collections

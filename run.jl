@@ -73,7 +73,7 @@ end
 kmax = 1
 D = 2
 
-#for i=1:3
+for i=1:3
     tic()
     ######################################################################
     # Class 0
@@ -102,7 +102,7 @@ D = 2
     pmoves.mumove = 0.1
     pmoves.priorkappa = 100.0
 
-    obj_a = MPM.MPMCls(prior, data, deepcopy(start), pmoves, 10.0)
+    obj_a = MPM.MPMSampler(prior, data, deepcopy(start), pmoves, 10.0)
     obj_a.usepriors = false
 
     mymh_a = OBC.MHRecord(obj_a,burn=1000,thin=50)
@@ -123,7 +123,7 @@ D = 2
         ones(kmax)/kmax, #w :: Vector{Float64}
         clamp(log(datab'/10),-8.0,Inf), #lam :: Matrix{Float64}
         1) #k :: Int
-    obj_b = MPM.MPMCls(prior, datab, deepcopy(start), pmoves, 10.0)
+    obj_b = MPM.MPMSampler(prior, datab, deepcopy(start), pmoves, 10.0)
     obj_b.usepriors = false
 
     mymh_b = OBC.MHRecord(obj_b,burn=1000,thin=50)
@@ -137,46 +137,46 @@ D = 2
     #g2 = MPM.calc_g(grid, mymh_b.db, 20)
 
     #@time be1 = MPM.bee_e_data(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
-    be2 = MPM.bee_e_data_grid(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
+    #be2 = MPM.bee_e_data_grid(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
     #@time becube = MPM.bee_e_cube(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
     #@time becube = MPM.bee_e_cube(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
     #@time beis,r = MPM.bee_e_nsum(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
-    #@time beis,r = MPM.bee_e_nsum(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
-    beis,r = MPM.bee_e_nsum(vcat(data,datab), mymh_a.db, mymh_b.db, 20, maxevals=100)
+    @time beis,r = MPM.bee_e_nsum(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
+    #@time beis,r = MPM.bee_e_nsum(vcat(data,datab), mymh_a.db, mymh_b.db, 20, maxevals=100)
     #@show be1
     #@show be2
     #@show becube
     @show beis
-    @show be2
+    #@show be2
 
     toc()
-#end
+end
 
-err = MPM.error_points(mymh_a.db, mymh_b.db, [tst_data; tst_datab], [zeros(size(tst_data,1)), ones(size(tst_datab,1))]) 
-println("holdout error: $err")
+#err = MPM.error_points(mymh_a.db, mymh_b.db, [tst_data; tst_datab], [zeros(size(tst_data,1)), ones(size(tst_datab,1))]) 
+#println("holdout error: $err")
 
 ######################################################################
 # Plotting
 ######################################################################
 
-include("src/plot_utils.jl")
-mins, maxs, (lens, steps, grid) = MPM.get_grid(vcat(data,datab))
+#include("src/plot_utils.jl")
+#mins, maxs, (lens, steps, grid) = MPM.get_grid(vcat(data,datab))
 
-close("all")
+#close("all")
 
-ga = MPM.calc_g(grid, mymh_a.db, 20)
-ga = exp(ga.-maximum(ga))
-imshow(reshape(ga,lens...)', extent=[mins[1],maxs[1],mins[2],maxs[2]], aspect="equal", origin="lower")
-colorbar()
+#ga = MPM.calc_g(grid, mymh_a.db, 20)
+#ga = exp(ga.-maximum(ga))
+#imshow(reshape(ga,lens...)', extent=[mins[1],maxs[1],mins[2],maxs[2]], aspect="equal", origin="lower")
+#colorbar()
 #contour(reshape(ga,n1,n2)', extent=gext, aspect="equal", origin="lower")
 #plot(data[:,1], data[:,2], "g.", alpha=0.8)
 
-allnodes = collect(r)
-for n in allnodes
-    if length(n.vals)!=0
-        plot(n.mins[1], n.mins[2], "g.")
-    end
-end
+#allnodes = collect(r)
+#for n in allnodes
+    #if length(n.vals)!=0
+        #plot(n.mins[1], n.mins[2], "g.")
+    #end
+#end
 
 #figure()
 #gavg = ga - gb
@@ -188,5 +188,5 @@ end
 
 #g() = plot(tst_data[:,1]+rand(size(tst_data,1)), tst_data[:,2]+rand(size(tst_data,1)), "g.", alpha=0.3)
 #fa() = plot_traces(mymh_a.db, [:mu,:sigma,:lam,:energy])
-fa() = plot_traces(mymh_a.db, [:sigma,:energy])
+#fa() = plot_traces(mymh_a.db, [:sigma,:energy])
 #fb() = plot_traces(mymh_b.db, [:mu,:sigma,:lam,:energy])

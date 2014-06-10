@@ -17,8 +17,8 @@ type MHRecord
     scheme_accept :: Dict{Int,Int}
 end
 
-MHRecord(obj::Sampler; burn=0, thin=1, verbose=false) = MHRecord(obj, 
-                                obj, #mapvalue
+MHRecord(obj::Sampler; burn=0, thin=1, verbose=false) = MHRecord(deepcopy(obj), 
+                                deepcopy(obj), #mapvalue
                                 Inf, #mapenergy
                                 Any[], #db
                                 0,0,1, #accept, total, iteration

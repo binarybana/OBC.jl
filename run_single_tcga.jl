@@ -56,7 +56,7 @@ for i=1:rounds
         clamp(log(data'/d),-10.0,Inf), #lam :: Matrix{Float64}
         1) #k :: Int
 
-    obj_a = MPM.MPMCls(prior, data, deepcopy(start), pmoves, d)
+    obj_a = MPM.MPMSampler(prior, data, deepcopy(start), pmoves, d)
     obj_a.usepriors = true
 
     mymh_a = MPM.MHRecord(obj_a,burn=burn,thin=thin)

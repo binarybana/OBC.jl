@@ -38,7 +38,7 @@ start = MPM.MPMParams(mu, #mu :: Matrix{Float64}
     1) #k :: Int
 
 pmoves = MPM.MPMPropMoves()
-obj_a = MPM.MPMCls(prior, data, deepcopy(start), pmoves, d)
+obj_a = MPM.MPMSampler(prior, data, deepcopy(start), pmoves, d)
 obj_a.usepriors = true
 
 opt = Opt(:LN_COBYLA, 2)

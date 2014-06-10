@@ -53,7 +53,7 @@ pmoves.lammove = 0.005
 pmoves.mumove = 0.6
 pmoves.priorkappa = 100.0
 
-obj_a = MPM.MPMCls(prior, data0, deepcopy(start), pmoves, d)
+obj_a = MPM.MPMSampler(prior, data0, deepcopy(start), pmoves, d)
 obj_a.usepriors = true
 
 mymh_a = MPM.MHRecord(obj_a,burn=1000,thin=50)
@@ -68,7 +68,7 @@ start = MPM.MPMParams(mu, #mu :: Matrix{Float64}
     ones(kmax)/kmax, #w :: Vector{Float64}
     clamp(log(data1'/d),-8.0,Inf), #lam :: Matrix{Float64}
     1) #k :: Int
-obj_b = MPM.MPMCls(prior, data1, deepcopy(start), pmoves, d)
+obj_b = MPM.MPMSampler(prior, data1, deepcopy(start), pmoves, d)
 mymh_b = MPM.MHRecord(obj_b,burn=1000,thin=50)
 sample(mymh_b,iters)
 

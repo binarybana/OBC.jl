@@ -9,7 +9,7 @@ using Iterators
 import OBC: propose, energy, reject
 include("utils.jl")
 
-export MPMPrior, MPMParams, MPMPropMoves, MPMCls, calc_g, gen_points, 
+export MPMPrior, MPMParams, MPMPropMoves, MPMSampler, calc_g, gen_points, 
     gen_posterior_points, calc_pvals, error_points, predict, error_moments_cube, 
     var_error_hists, e_error_hists, e_error_eff
 
@@ -92,7 +92,7 @@ end
 MPMPropMoves() = MPMPropMoves(0.1, 0.01, 0.1, 0.1, 80.0)
 
 
-type MPMCls <: Sampler
+type MPMSampler <: Sampler
     curr :: MPMParams
     old :: MPMParams
     prior :: MPMPrior
@@ -103,13 +103,13 @@ type MPMCls <: Sampler
     d :: Vector{Float64}
 end
 
-function MPMCls(prior::MPMPrior, data::Matrix{Float64}, obj::MPMParams, propmoves::MPMPropMoves, d::Float64)
+function MPMSampler(prior::MPMPrior, data::Matrix{Float64}, obj::MPMParams, propmoves::MPMPropMoves, d::Float64)
     @assert size(data,1) > size(data,2)
-    MPMCls(deepcopy(obj), deepcopy(obj), prior, data, propmoves, 
+    MPMSampler(deepcopy(obj), deepcopy(obj), prior, data, propmoves, 
             true, 0.0, ones(size(data,1))*d) # FIXME hardcoded d
 end
 
-function propose(obj::MPMCls)
+function propose(obj::MPMSampler)
     curr = obj.curr
     prior = obj.prior
     propmoves = obj.propmoves
@@ -191,7 +191,7 @@ end
 import Base.sum
 sum(x::Float64) = x
 
-function energy(obj::MPMCls)
+function energy(obj::MPMSampler)
     accum = 0.0
     #likelihoods
     for i in 1:size(obj.data,1)
@@ -222,7 +222,7 @@ function energy(obj::MPMCls)
     return accum - obj.green_factor
 end
     
-reject(obj::MPMCls) = copy!(obj.curr, obj.old)
+reject(obj::MPMSampler) = copy!(obj.curr, obj.old)
 
 function gen_points(n, d, pt)
     newpts = Array(Float64, size(pt.lam,1), n)
@@ -416,7 +416,7 @@ function bee_e_nsum(data, db1, db2, numlam; dmean=10.0, abstol=0.03, maxevals=30
     end
     tot1,r = NSum.nsum(2, error_1st, maxs, abstol=abstol, maxevals=maxevals)
     #println("maxs: $maxs")
-    println("NSum used $iters iterations, and $evals * numclasses evaluations")
+    #println("NSum used $iters iterations, and $evals * numclasses evaluations")
     tot1[2:end] /= 2
     return tot1, r
 end
