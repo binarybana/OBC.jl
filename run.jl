@@ -1,4 +1,4 @@
-reload("src/OBC.jl")
+reload("OBC.jl")
 using PyPlot
 using Distributions
 
@@ -83,30 +83,8 @@ for i=1:3
     tst_data = rand(510,D) .* 500 .+ 8
     tst_data[:,1] = 0
     #tst_data[:,1] = rand(0:1, 510)
-    data = tst_data[1:10,:]
+    dataa = tst_data[1:10,:]
 
-    cov = eye(D,D) .* 0.1
-    #cov = [0.5 -0.2; -0.2 1.0]
-    mu = ones(D,kmax)
-    #mu = [1.6 -1.0; 1.6 -1.0]
-    #mu = [0.2 0.2]'
-    prior = MPM.MPMPrior(D=D, kmax=kmax, kappa=10.)
-    start = MPM.MPMParams(mu, #mu :: Matrix{Float64}
-        cov, #sigma :: Matrix{Float64}
-        ones(kmax)/kmax, #w :: Vector{Float64}
-        clamp(log(data'/10),-8.0,Inf), #lam :: Matrix{Float64}
-        1) #k :: Int
-
-    pmoves = MPM.MPMPropMoves()
-    pmoves.lammove = 0.01
-    pmoves.mumove = 0.1
-    pmoves.priorkappa = 100.0
-
-    obj_a = MPM.MPMSampler(prior, data, deepcopy(start), pmoves, 10.0)
-    obj_a.usepriors = false
-
-    mymh_a = OBC.MHRecord(obj_a,burn=1000,thin=50)
-    @time OBC.sample(mymh_a,10000)
 
     ######################################################################
     # Class 1
@@ -118,16 +96,8 @@ for i=1:3
     #tst_datab[:,1] = rand(0:1, 510)
     datab = tst_datab[1:10,:]
 
-    start = MPM.MPMParams(mu, #mu :: Matrix{Float64}
-        cov, #sigma :: Matrix{Float64}
-        ones(kmax)/kmax, #w :: Vector{Float64}
-        clamp(log(datab'/10),-8.0,Inf), #lam :: Matrix{Float64}
-        1) #k :: Int
-    obj_b = MPM.MPMSampler(prior, datab, deepcopy(start), pmoves, 10.0)
-    obj_b.usepriors = false
-
-    mymh_b = OBC.MHRecord(obj_b,burn=1000,thin=50)
-    @time OBC.sample(mymh_b,10000)
+    cls = MPM.mpm_classifier(dataa, datab; burn=1000, thin=50, d=100.0)
+    @time MPM.sample(cls, 10000)
 
     #gext = [0,30.0,0,30]
     #n1, n2, xstride, ystride, grid = MPM.gen_grid(gext, 30)
@@ -141,7 +111,7 @@ for i=1:3
     #@time becube = MPM.bee_e_cube(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
     #@time becube = MPM.bee_e_cube(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
     #@time beis,r = MPM.bee_e_nsum(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
-    @time beis,r = MPM.bee_e_nsum(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
+    @time beis,r = MPM.bee_e_nsum(vcat(dataa,datab), cls.mcmc1.db, cls.mcmc2.db, 20)
     #@time beis,r = MPM.bee_e_nsum(vcat(data,datab), mymh_a.db, mymh_b.db, 20, maxevals=100)
     #@show be1
     #@show be2

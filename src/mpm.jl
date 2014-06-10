@@ -3,11 +3,12 @@ module MPM
 using Stats
 using Distributions
 using OBC
-include("nsum.jl")
 using Cubature
 using Iterators
+using NSum
 import OBC: propose, energy, reject
 include("utils.jl")
+include("mpmcls.jl")
 
 export MPMPrior, MPMParams, MPMPropMoves, MPMSampler, calc_g, gen_points, 
     gen_posterior_points, calc_pvals, error_points, predict, error_moments_cube, 
@@ -274,178 +275,6 @@ function calc_pvals(Ts, points, db, d=10.0)
     return pvals, tru_ts, tvals
 end
 
-function bee_moments(points,db1::Vector{Any},db2::Vector{Any},numlam,volume;dmean=10.0)
-    # FIXME This is only valid for c=0.5
-    g1 = calc_g(points, db1, numlam)
-    g2 = calc_g(points, db2, numlam)
-    bee_moments(points,db1,db2,g1,g2,numlam,volume,dmean=dmean)
-end
-
-function bee_moments(points,db1::Vector{Any}, db2::Vector{Any}, 
-        g1::Vector{Float64},g2::Vector{Float64},numlam,volume;dmean=10.0)
-    # FIXME This is only valid for c=0.5
-    bee = exp(logsum(min(g1,g2) .+ log(volume)))*0.5
-    numpts = size(points, 1)
-    dims = size(points,2)
-    dblen = length(db1)
-    assert(length(db1) == length(db2))
-
-    lams1 = Array(Float64, dims, numlam)
-    lams2 = Array(Float64, dims, numlam)
-    llams1 = Array(Float64, dims, numlam)
-    llams2 = Array(Float64, dims, numlam)
-    rlams1 = Array(Float64, dims, numlam)
-    rlams2 = Array(Float64, dims, numlam)
-    bee2 = dbpass = 0.0
-    points = points'
-    lgpoints = lgamma(points .+ 1)
-
-    for i in 1:dblen 
-        dbpass = 0.0
-        curr1 = db1[i]
-        curr2 = db2[i]
-        assert(curr1.k==1 && curr2.k==1)
-        rand!(MultivariateNormal(curr1.mu[:,1], curr1.sigma), lams1)
-        rand!(MultivariateNormal(curr2.mu[:,1], curr2.sigma), lams2)
-        for k=1:numlam*dims 
-            rlams1[k] = dmean * exp(lams1[k])
-            llams1[k] = log(dmean) + lams1[k]
-            rlams2[k] = dmean * exp(lams2[k])
-            llams2[k] = log(dmean) + lams2[k]
-        end
-        for j in 1:numpts # each point
-            accumlam1 = 0.0
-            accumlam2 = 0.0
-            for s in 1:numlam # each lambda
-                accumD1 = 0.0
-                accumD2 = 0.0
-                for d in 1:dims # each dimension
-                    accumD1 += points[d,j]*llams1[d,s] - rlams1[d,s] - lgpoints[d,j]
-                    accumD2 += points[d,j]*llams2[d,s] - rlams2[d,s] - lgpoints[d,j]
-                end
-                accumlam1 += exp(accumD1)
-                accumlam2 += exp(accumD2)
-            end
-            temp = g1[j] < g2[j] ? accumlam1 : accumlam2
-            #temp = accumlam1 # for testing purposes
-            dbpass += temp
-        end
-        temp = 0.5*dbpass/numlam*volume
-        bee2 += temp^2
-    end
-    bee2 /= dblen
-    return bee, bee2
-end
-
-function bee_e_eff(g0, g1, volume)
-    # FIXME This is only valid for c=0.5
-    # Calculate expectation of error given the two effective class conditional
-    # densities (posterior predictive densities)
-    exp(logsum(min(g0,g1) .+ log(volume)))*0.5
-end
-
-function bee_e_grid(points, db1, db2, numlam, volume; dmean=10.0)
-    # FIXME This is only valid for c=0.5
-    g1 = calc_g(points, db1, numlam, dmean=dmean)
-    g2 = calc_g(points, db2, numlam, dmean=dmean)
-    bee_e_eff(g1,g2,volume)
-end
-
-function bee_e_data_grid(data, db1, db2, numlam; dmean=10.0)
-    mins,maxs = get_bbox(data)
-    lens,steps,points = gen_unit_grid(mins,maxs)
-    println("Num points: $(size(points)), maxs: $maxs")
-    bee_e_grid(points, db1, db2, numlam, prod(steps))
-end
-
-function bee_e_data(data, db1, db2, numlam; dmean=10.0, maxtry=10)
-    # FIXME This is only valid for c=0.5
-    local volume, points, g1, g2
-    g1sum = g2sum = 0.0
-    factor = 0.0
-    D = size(data,2)
-    maxN = iround(20_000^(1/D))
-    trycount = 1
-    numpts = 0
-    while max(abs(g1sum-1.0),abs(g2sum-1.0)) > 0.1
-        mins, maxs = get_bbox(data, factor=factor)
-        lens, steps, points = gen_grid(mins, maxs, maxN)
-        volume = prod(steps)
-        g1 = calc_g(points, db1, numlam, dmean=dmean)
-        g2 = calc_g(points, db2, numlam, dmean=dmean)
-        g1sum = exp(logsum(g1 .+ log(volume)))
-        g2sum = exp(logsum(g2 .+ log(volume)))
-        println("g1 sum: $g1sum")
-        println("g2 sum: $g2sum")
-        numpts += length(points)
-        #println("steps: $steps")
-        #println(maxs, " ", size(points), " ", factor)
-        factor += 1.0
-        if trycount > maxtry
-            return -min(g1sum, g2sum)
-        else
-            trycount += 1
-        end
-    end
-    println("bee_e_data used $trycount iterations, and $numpts * numclasses evaluations")
-    bee_e_eff(g1,g2,volume)
-end
-
-function bee_e_nsum(data, db1, db2, numlam; dmean=10.0, abstol=0.03, maxevals=30)
-    # FIXME This is only valid for c=0.5
-    mins, maxs = get_bbox(data, factor=2)
-    assert(length(db1) == length(db2))
-    global iters = 0
-    global evals = 0
-    function error_1st(data)
-        points, vals = data
-        tabpoints = hcat(points...)
-        #points: dxn array to evaluate at
-        #vals: 2xn values to store into
-        numpts = length(points)
-        iters += 1
-        evals += numpts
-        g1 = calc_g(tabpoints', db1, numlam, dmean=dmean)
-        g2 = calc_g(tabpoints', db2, numlam, dmean=dmean)
-        errpts = exp(min(g1,g2))
-        for i=1:numpts
-            resize!(vals[i], 2)
-            vals[i][1] = exp(g1[i])
-            vals[i][2] = errpts[i]
-        end
-    end
-    tot1,r = NSum.nsum(2, error_1st, maxs, abstol=abstol, maxevals=maxevals)
-    #println("maxs: $maxs")
-    #println("NSum used $iters iterations, and $evals * numclasses evaluations")
-    tot1[2:end] /= 2
-    return tot1, r
-end
-
-function bee_e_cube(data, db1, db2, numlam; dmean=10.0, abstol=0.03, maxevals=0)
-    # FIXME This is only valid for c=0.5
-    # Get the first moments using histories and adaptive integration by
-    # calling Cubature.hquadrature_v with a function that evaluates the error
-    # at multiple points at a time
-    mins, maxs = get_bbox(data, factor=2)
-    assert(length(db1) == length(db2))
-    global iters = 0
-    global evals = 0
-    function error_1st(points, vals)
-        #points: dxn array to evaluate at
-        #vals: 2xn values to store into
-        numpts = size(points, 2)
-        iters += 1
-        evals += numpts
-        g1 = calc_g(points', db1, numlam, dmean=dmean)
-        g2 = calc_g(points', db2, numlam, dmean=dmean)
-        vals[:] = exp(min(g1,g2))
-    end
-    val, err = hcubature_v(error_1st, mins, maxs, abstol=abstol, maxevals=maxevals)
-    println("maxs: $maxs, mins: $mins")
-    println("Cubature used $iters iterations, and $evals * numclasses evaluations")
-    return val*0.5, err
-end
-
 function calc_g(points, db, numlam; dmean=10.0)
     numpts = size(points, 1)
     dims = size(points, 2)
@@ -477,16 +306,6 @@ function calc_g(points, db, numlam; dmean=10.0)
         end
     end
     return log(res / length(db))
-end
-
-function predict(db0, db1, points)
-    g0 = calc_g(points, db0, 20)
-    g1 = calc_g(points, db1, 20)
-    return vec((g0 .- g1) .< 0) * 1
-end
-
-function error_points(db0, db1, points, labels)
-    return sum(abs(predict(db0, db1, points) - labels))/size(labels,1)
 end
 
 end
