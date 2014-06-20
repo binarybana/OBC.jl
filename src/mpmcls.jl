@@ -36,6 +36,12 @@ function sample(cls::OBC.BinaryClassifier, iters=10000)
     return t1-t0, t2-t1
 end
 
+function accuracies(cls::OBC.BinaryClassifier)
+    acc1 = cls.mcmc1.count_accept / cls.mcmc1.count_total
+    acc2 = cls.mcmc2.count_accept / cls.mcmc2.count_total
+    acc1,acc2
+end
+
 function bee_moments(points,db1::Vector{Any},db2::Vector{Any},numlam,volume;dmean=10.0)
     # FIXME This is only valid for c=0.5
     g1 = calc_g(points, db1, numlam)
@@ -153,8 +159,10 @@ function bee_e_data(data, db1, db2, numlam; dmean=10.0, maxtry=10)
     bee_e_eff(g1,g2,volume)
 end
 
-function bee_e_nsum(data, db1, db2, numlam; dmean=10.0, abstol=0.03, maxevals=30)
-    # FIXME This is only valid for c=0.5
+function bee_e_nsum(cls::OBC.BinaryClassifier, numlam; dmean=10.0, abstol=0.03, maxevals=30)
+    # FIXME This is currently only valid for c=0.5
+    data = vcat(cls.cls1.data, cls.cls2.data)
+    db1,db2 = cls.mcmc1.db, cls.mcmc2.db
     mins, maxs = get_bbox(data, factor=2)
     assert(length(db1) == length(db2))
     global iters = 0
@@ -171,15 +179,16 @@ function bee_e_nsum(data, db1, db2, numlam; dmean=10.0, abstol=0.03, maxevals=30
         g2 = calc_g(tabpoints', db2, numlam, dmean=dmean)
         errpts = exp(min(g1,g2))
         for i=1:numpts
-            resize!(vals[i], 2)
+            resize!(vals[i], 3)
             vals[i][1] = exp(g1[i])
-            vals[i][2] = errpts[i]
+            vals[i][2] = exp(g2[i])
+            vals[i][3] = errpts[i]
         end
     end
-    tot1,r = NSum.nsum(2, error_1st, maxs, abstol=abstol, maxevals=maxevals)
+    tot1,r = NSum.nsum(3, error_1st, maxs, abstol=abstol, maxevals=maxevals)
     #println("maxs: $maxs")
     #println("NSum used $iters iterations, and $evals * numclasses evaluations")
-    tot1[2:end] /= 2
+    tot1[3:end] /= 2 # for c=0.5
     return tot1, r
 end
 

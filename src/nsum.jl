@@ -212,8 +212,8 @@ function nsum(fdim::Integer, f::Function, maxs; abstol=0.01, maxevals=30)
     subdivide!(r)
     subdivide!(r)
     subdivide!(r)
-    #subdivide!(r)
-    #subdivide!(r)
+    subdivide!(r)
+    subdivide!(r)
     
     dirtylist = ({}, {})
     dfs(addifdirty, dirtylist, r, true)
@@ -226,12 +226,11 @@ function nsum(fdim::Integer, f::Function, maxs; abstol=0.01, maxevals=30)
 
     count = 0
     findtype = 1
-    while abs(tots[1]-1) > abstol && count < maxevals
+    totnum = fdim==1 ? 1 : fdim - 1
+    while any(abs(tots[1:totnum].-1) .> abstol) && count < maxevals
         count += 1
 
         if findtype == 1
-            #println("Getting max")
-            #get max 
             maxr = find_max(r)
             r === maxr && break # Exhausted everything
 

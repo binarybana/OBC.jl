@@ -111,7 +111,7 @@ for i=1:3
     #@time becube = MPM.bee_e_cube(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
     #@time becube = MPM.bee_e_cube(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
     #@time beis,r = MPM.bee_e_nsum(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
-    @time beis,r = MPM.bee_e_nsum(vcat(dataa,datab), cls.mcmc1.db, cls.mcmc2.db, 20)
+    @time beis,r = MPM.bee_e_nsum(cls, 20)
     #@time beis,r = MPM.bee_e_nsum(vcat(data,datab), mymh_a.db, mymh_b.db, 20, maxevals=100)
     #@show be1
     #@show be2

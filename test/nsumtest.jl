@@ -1,5 +1,4 @@
 using Distributions
-#using Base.Collections
 using Iterators
 reload("src/nsum.jl")
 
@@ -21,9 +20,6 @@ function gen_unit_grid(mins, maxs)
     hcat(map(collect, Iterators.product(ranges...))...)'
 end
 
-rate = 1000
-iters = 0
-evals = 0
 function f(x, vals)
     global iters,evals
     iters += 1
@@ -66,28 +62,38 @@ rtest = NSum.Region(3, 512)
 NSum.subdivide!(rtest)
 
 
-upp = 2000
-D = 3
-#println("####################")
-#ndivs=10
-#xs=linspace(0,upp,ndivs)
-#spacing=upp/ndivs
-#est = spacing*sum(map(x->pdf(Poisson(rate), ifloor(x)), xs))
-#println("Estimate using $ndivs ndivs is $est")
-
-println("####################")
-@time tot1,r = NSum.nsum(1, ftree_skinny, zeros(D).+upp, abstol=0.03, maxevals=10)
-@show tot1
-println("With $iters iters and $evals fun evals")
+rate = 30000
 iters = 0
 evals = 0
-@time tot2,r = NSum.nsum(1, ftree_skinny, zeros(D).+upp, abstol=0.03, maxevals=100)
+
+upp = 130000
+D = 3
+
+println("####################")
+ndivs=100
+xs=linspace(0,upp,ndivs)
+spacing=upp/ndivs
+est = spacing*sum(map(x->pdf(Poisson(rate), ifloor(x)), xs))
+println("Estimate using $ndivs ndivs is $est")
+
+println("####################")
+@time tot1,r = NSum.nsum(1, ftree, zeros(D).+upp, abstol=0.03, maxevals=20)
+@show tot1
+println("With $iters iters and $evals fun evals")
+
+println("####################")
+iters = 0
+evals = 0
+@time tot2,r = NSum.nsum(1, ftree_skinny, zeros(D).+upp, abstol=0.03, maxevals=50)
 @show tot2
+println("With $iters iters and $evals fun evals")
+
+#println("####################")
 #iters = 0
 #evals = 0
 #@time tot,r = IntSum.nsum(ftree, zeros(D).+upp)
 #@show tot
-println("With $iters iters and $evals fun evals")
+#println("With $iters iters and $evals fun evals")
 
 #allnodes = collect(r)
 
