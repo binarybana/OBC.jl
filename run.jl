@@ -29,7 +29,7 @@ num_feat = setv(params, "num_feat", 2, int)
 rseed = setv(params, "rseed", rand(Uint), int)
 #seed = setv(params, "seed", 1234, int)
 seed = setv(params, "seed", rand(Uint), int)
-Ntrn = setv(params, "Ntrn", 10, int)
+Ntrn = setv(params, "Ntrn", 20, int)
 Ntst = setv(params, "Ntst", 300, int)
 f_glob = setv(params, "f_glob", 1, int)
 subclasses = setv(params, "subclasses", 2, int)
@@ -56,18 +56,18 @@ function gen_data(mu, cov, n)
             ps[i,j] = rand(Poisson(rand(Uniform(lowd,highd)) * exp(lams[i,j])))
         end
     end
-    ps
+    lams, ps
 end
 
 function gen_data_jason(mu)
     D = num_feat
-    lmu0 = zeros(D) .+ mu 
-    cov0 = eye(D)*0.05
-    #@show lmu0 cov0
-    trn_data0 = gen_data(lmu0, cov0, Ntrn)
-    tst_data0 = gen_data(lmu0, cov0, Ntst)
-    #return lmu0, cov0, ones(2,10)+1, tst_data0
-    return lmu0, cov0, trn_data0', tst_data0'
+    lmu = zeros(D) .+ mu 
+    cov = eye(D)*0.5
+    cov[1,2] = -0.1
+    cov[2,1] = -0.1
+    lam1, trn_data = gen_data(lmu, cov, Ntrn)
+    lam2, tst_data = gen_data(lmu, cov, Ntst)
+    return lmu, cov, trn_data', tst_data', lam1, lam2
 end
 
 kmax = 1
@@ -76,7 +76,7 @@ D = 2
 ######################################################################
 # Class 0
 ######################################################################
-trumu, trucov, dataa, tst_data = gen_data_jason(0.0)
+#trumu, trucov, dataa, tst_dataa,lam1,lam2 = gen_data_jason(0.0)
 #tst_data = rand(510,D) .* 500 .+ 8
 #tst_data[:,1] = 0
 ##tst_data[:,1] = rand(0:1, 510)
@@ -86,40 +86,37 @@ trumu, trucov, dataa, tst_data = gen_data_jason(0.0)
 ######################################################################
 # Class 1
 ######################################################################
-trumub, trucovb, datab, tst_datab = gen_data_jason(-1.0)
+#trumub, trucovb, datab, tst_datab,_,_ = gen_data_jason(-1.0)
 #tst_datab = rand(510,D) .* 500 .+ 8
 #tst_datab[:,1] = 2
 ##tst_datab[:,1] = rand(0:1, 510)
 #datab = tst_datab[1:10,:]
 
-#for i=1:3
-    #tic()
+errs = Float64[]
+dtries = logspace(0,3,40)
+for d=dtries
 
-    cls = MPM.mpm_classifier(dataa, datab; burn=1000, thin=50, d=10.0)
+    cls = MPM.mpm_classifier(dataa, datab; burn=1000, thin=50, d=d, usepriors=false)
     @time MPM.sample(cls, 10000)
+    #pts1 = MPM.gen_posterior_points(100, d, cls.mcmc1.db)
+    #pts2 = MPM.gen_posterior_points(100, d, cls.mcmc2.db)
 
-    #gext = [0,30.0,0,30]
-    #n1, n2, xstride, ystride, grid = MPM.gen_grid(gext, 30)
-    #gext, (n1, n2, xstride, ystride, grid) = MPM.get_grid(vcat(data,datab))
+    #@time beis,r = MPM.bee_e_nsum(cls, 50)
+    @time bemc = MPM.bee_e_mc(cls, dmean=d)
+    @show bemc
+    push!(errs, bemc)
 
-    #g1 = MPM.calc_g(grid, mymh_a.db, 20)
-    #g2 = MPM.calc_g(grid, mymh_b.db, 20)
+    #N = 30
+    #beis = Float64[]
+    #for i=1:N
+        #b,r = MPM.bee_e_nsum(cls, 50)
+        #push!(beis, b[3])
+    #end
+    #@show mean(beis), std(beis)
+    #beis = [MPM.bee_e_mc(cls, numpts=50) for i=1:N]
+    #@show mean(beis), std(beis)
 
-    #@time be1 = MPM.bee_e_data(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
-    #be2 = MPM.bee_e_data_grid(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
-    #@time becube = MPM.bee_e_cube(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
-    #@time becube = MPM.bee_e_cube(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
-    #@time beis,r = MPM.bee_e_nsum(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
-    @time beis,r = MPM.bee_e_nsum(cls, 50)
-    #@time beis,r = MPM.bee_e_nsum(vcat(data,datab), mymh_a.db, mymh_b.db, 20, maxevals=100)
-    #@show be1
-    #@show be2
-    #@show becube
-    @show beis
-    #@show be2
-
-    #toc()
-#end
+end
 
 #err = MPM.error_points(mymh_a.db, mymh_b.db, [tst_data; tst_datab], [zeros(size(tst_data,1)), ones(size(tst_datab,1))]) 
 #println("holdout error: $err")
