@@ -2,6 +2,7 @@ module MPM
     
 using Stats
 using Distributions
+import Distributions: sample
 using OBC
 using Cubature
 using Iterators
@@ -93,8 +94,7 @@ type MPMPropMoves
     priorkappa :: Float64
     premove :: Float64
 end
-MPMPropMoves() = MPMPropMoves(0.1, 0.01, 0.1, 0.1, 80.0, 0.05)
-
+MPMPropMoves() = MPMPropMoves(0.3, 0.1, 0.1, 0.1, 100.0, 0.2)
 
 type MPMSampler <: Sampler
     curr :: MPMParams
@@ -120,17 +120,17 @@ function propose(obj::MPMSampler)
 
     copy!(obj.old, curr)
 
-    range = [0:2]
+    schemes = [0:2]
     obj.green_factor = 0.0
     
     if curr.k == 1 && curr.k == prior.kmax
         scheme = 2
     elseif curr.k == 1
-        scheme = wsample(range, [1., 0., 7.])
+        scheme = wsample(schemes, [1., 0., 7.])
     elseif curr.k == prior.kmax
-        scheme = wsample(range, [0., 1., 7.])
+        scheme = wsample(schemes, [0., 1., 7.])
     else
-        scheme = wsample(range, [1., 1., 6.])
+        scheme = wsample(schemes, [1., 1., 6.])
     end
 
     if scheme == 0 # Birth
@@ -164,31 +164,41 @@ function propose(obj::MPMSampler)
             i=1
         end
 
-        #Modify means
-        curr.mu[:,i] += randn(prior.D) * propmoves.mumove
+        #Block updating:
+        scheme = sample(2:4)
 
-        #Modify di's
-        #curr.d = clamp(curr.d + randn(self.n) * 0.2, 8,12) #FIXME 
+        if scheme == 2
+            #Modify means
+            curr.mu[:,i] += randn(prior.D) * propmoves.mumove
 
-        #Modify covariances
-        #temp = curr.sigma .* (0.5 .+ rand(prior.D, prior.D)) #.* curr.sigma ./ mean(curr.sigma)
-        #temp = curr.sigma .+ diagm(abs(clamp(diag(curr.sigma),0.001,Inf)) .* (rand(prior.D).-0.5))
-        #temp = (temp'*temp).^(1/2)
-        #if isposdef(temp) && false #rand(1:100) > 2
-            #curr.sigma = temp
-        #else
-        for i=1:prior.D*prior.D
-            curr.sigpre[i] += rand(Normal(0.0,propmoves.premove))
+        elseif scheme == 3
+
+            #Modify covariances
+            #temp = curr.sigma .* (0.5 .+ rand(prior.D, prior.D)) #.* curr.sigma ./ mean(curr.sigma)
+            #temp = curr.sigma .+ diagm(abs(clamp(diag(curr.sigma),0.001,Inf)) .* (rand(prior.D).-0.5))
+            #temp = (temp'*temp).^(1/2)
+            #if isposdef(temp) && false #rand(1:100) > 2
+                #curr.sigma = temp
+            #else
+            for i=1:prior.D*prior.D
+                curr.sigpre[i] += rand(Normal(0.0,propmoves.premove))
+            end
+            At_mul_B!(curr.sigma, curr.sigpre, curr.sigpre) # sigma = sigpre'*sigpre
+
+            #curr.sigma = rand(InverseWishart(propmoves.priorkappa, 
+                    #curr.sigma*(propmoves.priorkappa-1-prior.D)))
+            #end
+
+        elseif scheme == 4
+            # Modify lambdas
+            for i in 1:length(curr.lam) 
+                curr.lam[i] += randn() * propmoves.lammove
+            end
+
+            #Modify di's
+            #curr.d = clamp(curr.d + randn(self.n) * 0.2, 8,12) #FIXME 
         end
-        At_mul_B!(curr.sigma, curr.sigpre, curr.sigpre) # sigma = sigpre'*sigpre
 
-        #curr.sigma = rand(InverseWishart(propmoves.priorkappa, 
-                #curr.sigma*(propmoves.priorkappa-1-prior.D)))
-        #end
-
-        for i in 1:length(curr.lam) 
-            curr.lam[i] += randn() * propmoves.lammove
-        end
     end
     #if abs(obj.green_factor) > 2
         #println("green: $(obj.green_factor), scheme: $scheme")
