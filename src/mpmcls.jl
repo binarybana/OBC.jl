@@ -6,11 +6,8 @@ function mpm_classifier(data1, data2; burn=1000, thin=50, d=100.0, usepriors=tru
     D = size(data1, 2)
     cov = eye(D,D) .* 0.1
     mu = ones(D,kmax)
-    prior = MPM.MPMPrior(D=D, kmax=kmax, kappa=10., S=eye(D)*10)
+    prior = MPM.MPMPrior(D=D, kmax=kmax, kappa=10., S=eye(D)*0.05*10)
     pmoves = MPM.MPMPropMoves()
-    pmoves.lammove = 0.005
-    pmoves.mumove = 0.6
-    pmoves.priorkappa = 100.0
 
     # Class 1
     start = MPM.MPMParams(mu, cov, ones(kmax)/kmax, #w 
@@ -159,6 +156,19 @@ function bee_e_data(data, db1, db2, numlam; dmean=10.0, maxtry=10)
     end
     println("bee_e_data used $trycount iterations, and $numpts * numclasses evaluations")
     bee_e_eff(g1,g2,volume)
+end
+
+function bee_e_mc(cls::OBC.BinaryClassifier; dmean=10.0, numpts=100)
+    #FIXME only c=0.5
+    #Generate points from each class
+    pts1 = gen_posterior_points(numpts, dmean, cls.mcmc1.db)
+    pts2 = gen_posterior_points(numpts, dmean, cls.mcmc2.db)
+    acc_numpts = size(pts1,2) + size(pts2,2) # requested != generated
+
+    #Now classify and count up mistakes
+    points = hcat(pts1,pts2)
+    labels = [zeros(size(pts1,2)), ones(size(pts2,2))]
+    return sum(abs(predict(cls.mcmc1.db, cls.mcmc2.db, points') .- labels))/acc_numpts
 end
 
 function bee_e_nsum(cls::OBC.BinaryClassifier, numlam; dmean=10.0, abstol=0.03, maxevals=30)
