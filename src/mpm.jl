@@ -50,23 +50,25 @@ end
 type MPMParams 
     mu :: Matrix{Float64}
     sigma :: Matrix{Float64}
+    sigpre :: Matrix{Float64}
     w :: Vector{Float64}
     lam :: Matrix{Float64}
     k :: Int
     energy :: Float64 # I dunno... does this belong here?
     # d :: Vector{Float64}
-    function MPMParams(mu, sigma, w, lam, k)
+    function MPMParams(mu, sigpre, w, lam, k)
         @assert size(mu,2) == k
-        @assert size(sigma) == (size(mu,1),size(mu,1))
+        @assert size(sigpre) == (size(mu,1),size(mu,1))
         @assert length(w) == k
         @assert size(lam,1) == size(mu,1)
-        new(mu, sigma, w, lam, k, 0.0)
+        new(mu, sigpre'*sigpre, sigpre, w, lam, k, 0.0)
     end
 end
 
 function copy!(to::MPMParams, from::MPMParams)
     to.mu[:] = from.mu
     to.sigma[:] = from.sigma
+    to.sigpre[:] = from.sigpre
     to.w[:] = from.w
     to.lam[:] = from.lam
     to.k = from.k
@@ -89,8 +91,9 @@ type MPMPropMoves
     wmove :: Float64
     birthmove :: Float64
     priorkappa :: Float64
+    premove :: Float64
 end
-MPMPropMoves() = MPMPropMoves(0.1, 0.01, 0.1, 0.1, 80.0)
+MPMPropMoves() = MPMPropMoves(0.1, 0.01, 0.1, 0.1, 80.0, 0.05)
 
 
 type MPMSampler <: Sampler
@@ -174,8 +177,13 @@ function propose(obj::MPMSampler)
         #if isposdef(temp) && false #rand(1:100) > 2
             #curr.sigma = temp
         #else
-        curr.sigma = rand(InverseWishart(propmoves.priorkappa, 
-                curr.sigma*(propmoves.priorkappa-1-prior.D)))
+        for i=1:prior.D*prior.D
+            curr.sigpre[i] += rand(Normal(0.0,propmoves.premove))
+        end
+        At_mul_B!(curr.sigma, curr.sigpre, curr.sigpre) # sigma = sigpre'*sigpre
+
+        #curr.sigma = rand(InverseWishart(propmoves.priorkappa, 
+                #curr.sigma*(propmoves.priorkappa-1-prior.D)))
         #end
 
         for i in 1:length(curr.lam) 
@@ -208,6 +216,7 @@ function energy(obj::MPMSampler)
 
     if obj.usepriors
         # Sigma
+        #accum -= sum(logpdf(Normal(0.0, obj.propmoves.premove), obj.sigpre)) 
         accum -= logpdf(InverseWishart(obj.prior.kappa, obj.prior.S), obj.curr.sigma)
         # k
         accum -= logpdf(Geometric(obj.prior.mix_comps), obj.curr.k)
