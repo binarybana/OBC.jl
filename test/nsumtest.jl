@@ -62,33 +62,33 @@ end
 
 feasy(x) = (v = zeros(size(x)...); f(x,v); sum(v))
 
-rate = 804
-upp = 1002
+rate = 90000
+iters = 0
+evals = 0
+
+upp = 130000
 D = 2
 
-#lens = [8,16]
-#r = NSum.RegionTree(lens)
-#NSum.cut!(r)
+lens = [2,16]
+r = NSum.RegionTree(lens)
+NSum.cut!(r)
 
-#println("####################")
-#ndivs=100
-#xs=linspace(0,upp,ndivs)
-#spacing=upp/ndivs
-#est = spacing*sum(map(x->pdf(Poisson(rate), ifloor(x)), xs))
-#println("Estimate using $ndivs ndivs is $est")
+println("####################")
+ndivs=1000
+xs=linspace(0,upp,ndivs)
+spacing=upp/ndivs
+est = spacing*sum(map(x->pdf(Poisson(rate), ifloor(x)), xs))
+println("Estimate using $ndivs ndivs is $est")
 
-#println("####################")
-#iters = 0
-#evals = 0
-#@time tot1,r = NSum.nsum(1, ftree, zeros(D).+upp, abstol=0.03, maxevals=100)
-#@show tot1
-#println("With $iters iters and $evals fun evals")
+println("####################")
+@time tot1,r = NSum.nsum(1, ftree, zeros(D).+upp, abstol=0.03, maxevals=50)
+@show tot1
+println("With $iters iters and $evals fun evals")
 
 println("####################")
 iters = 0
 evals = 0
-@time tot2,r = NSum.nsum(1, ftree_skinny, [5, 1000,1000], abstol=0.03, maxevals=100)
-#@time tot2,r = NSum.nsum(1, ftree_skinny, zeros(D).+upp, abstol=0.03, maxevals=100)
+@time tot2,r = NSum.nsum(1, ftree_skinny, zeros(D).+upp, abstol=0.03, maxevals=50)
 @show tot2
 println("With $iters iters and $evals fun evals")
 
@@ -99,41 +99,22 @@ println("With $iters iters and $evals fun evals")
 #@show tot
 #println("With $iters iters and $evals fun evals")
 
-#println("###############################")
-allnodes = collect(r)
+#allnodes = collect(r)
 
-using PyPlot
-close("all")
-figure()
-for n in allnodes
-    if isa(n,NSum.RegionLeaf)
-        for p in n.evals
-            plot(p.location[1], p.location[2], "g.")
-        end
-    else
-        p1 = copy(n.root)
-        p2 = n.root .+ n.dims
-        p1[n.cutdim] += n.dims[n.cutdim]/2
-        p2[n.cutdim] -= n.dims[n.cutdim]/2
-        #@show n.root, n.dims, n.cutdim
-        #@show p1,p2
-        c = 0.5
-        if n.cutdim == 1
-            plot([p1[1], p2[1]], [p1[2]+c, p2[2]-c], "r-")
-        else
-            plot([p1[1]+c, p2[1]-c], [p1[2], p2[2]], "r-")
-        end
-    end
-end
-lens, steps, grid = gen_grid(zeros(D), zeros(D).+upp.-1, 50)
-pts = NSum.EvalPoint[]
+#using PyPlot
+#close("all")
+#figure()
+#for n in allnodes
+    #if length(n.vals)!=0
+        #plot(n.mins[1], n.mins[2], "g.")
+    #end
+#end
+#lens, steps, grid = gen_grid(zeros(D), zeros(D).+upp.-1, 50)
 
-for i=1:size(grid,1)
-    push!(pts, NSum.EvalPoint(int(vec(grid[i,:])),[]))
-end
-ftree_skinny(pts)
-vals = [x.vals[1] for x in pts]
-imshow(reshape(vals,lens...), extent=[0,upp,0,upp], origin="lower")
+#vals = zeros(size(grid,1))
+#f(grid',vals)
+
+#imshow(reshape(vals,lens...), extent=[0,upp,0,upp], origin="lower")
 
 ## NOTE TO SELF: trying to get above code to work to verify that my new 
 # find uneven branch code with midpoint is working

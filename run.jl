@@ -1,5 +1,5 @@
 reload("OBC.jl")
-using PyPlot
+#using PyPlot
 using Distributions
 
 #srand(1)
@@ -73,30 +73,29 @@ end
 kmax = 1
 D = 2
 
-for i=1:3
-    tic()
-    ######################################################################
-    # Class 0
-    ######################################################################
-
-    #trumu, trucov, data, tst_data = gen_data_jason(0.0)
-    tst_data = rand(510,D) .* 500 .+ 8
-    tst_data[:,1] = 0
-    #tst_data[:,1] = rand(0:1, 510)
-    dataa = tst_data[1:10,:]
+######################################################################
+# Class 0
+######################################################################
+trumu, trucov, dataa, tst_data = gen_data_jason(0.0)
+#tst_data = rand(510,D) .* 500 .+ 8
+#tst_data[:,1] = 0
+##tst_data[:,1] = rand(0:1, 510)
+#dataa = tst_data[1:10,:]
 
 
-    ######################################################################
-    # Class 1
-    ######################################################################
+######################################################################
+# Class 1
+######################################################################
+trumub, trucovb, datab, tst_datab = gen_data_jason(-1.0)
+#tst_datab = rand(510,D) .* 500 .+ 8
+#tst_datab[:,1] = 2
+##tst_datab[:,1] = rand(0:1, 510)
+#datab = tst_datab[1:10,:]
 
-    #trumub, trucovb, datab, tst_datab = gen_data_jason(-1.0)
-    tst_datab = rand(510,D) .* 500 .+ 8
-    tst_datab[:,1] = 2
-    #tst_datab[:,1] = rand(0:1, 510)
-    datab = tst_datab[1:10,:]
+#for i=1:3
+    #tic()
 
-    cls = MPM.mpm_classifier(dataa, datab; burn=1000, thin=50, d=100.0)
+    cls = MPM.mpm_classifier(dataa, datab; burn=1000, thin=50, d=10.0)
     @time MPM.sample(cls, 10000)
 
     #gext = [0,30.0,0,30]
@@ -111,7 +110,7 @@ for i=1:3
     #@time becube = MPM.bee_e_cube(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
     #@time becube = MPM.bee_e_cube(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
     #@time beis,r = MPM.bee_e_nsum(vcat(data,datab), mymh_a.db, mymh_b.db, 20)
-    @time beis,r = MPM.bee_e_nsum(cls, 20)
+    @time beis,r = MPM.bee_e_nsum(cls, 50)
     #@time beis,r = MPM.bee_e_nsum(vcat(data,datab), mymh_a.db, mymh_b.db, 20, maxevals=100)
     #@show be1
     #@show be2
@@ -119,8 +118,8 @@ for i=1:3
     @show beis
     #@show be2
 
-    toc()
-end
+    #toc()
+#end
 
 #err = MPM.error_points(mymh_a.db, mymh_b.db, [tst_data; tst_datab], [zeros(size(tst_data,1)), ones(size(tst_datab,1))]) 
 #println("holdout error: $err")
@@ -156,7 +155,5 @@ end
 #plot(data[:,1], data[:,2], "g.", alpha=0.8)
 #plot(datab[:,1], datab[:,2], "r.", alpha=0.8)
 
-#g() = plot(tst_data[:,1]+rand(size(tst_data,1)), tst_data[:,2]+rand(size(tst_data,1)), "g.", alpha=0.3)
-#fa() = plot_traces(mymh_a.db, [:mu,:sigma,:lam,:energy])
-#fa() = plot_traces(mymh_a.db, [:sigma,:energy])
-#fb() = plot_traces(mymh_b.db, [:mu,:sigma,:lam,:energy])
+reload(Pkg.dir("OBC","src","plot_utils.jl"))
+fa() = plot_traces(cls.mcmc1.db, [:mu,:sigma,:lam,:energy])

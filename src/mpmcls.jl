@@ -1,6 +1,6 @@
 # Everything dealing with TWO classifier objects
 
-function mpm_classifier(data1, data2; burn=1000, thin=50, d=100.0)
+function mpm_classifier(data1, data2; burn=1000, thin=50, d=100.0, usepriors=true)
     assert(size(data1,2) == size(data1,2))
     kmax = 1
     D = size(data1, 2)
@@ -17,11 +17,13 @@ function mpm_classifier(data1, data2; burn=1000, thin=50, d=100.0)
         clamp(log(data1'/d),-8.0,Inf), #lam 
         1) #k :: Int
     obj_a = MPM.MPMSampler(prior, data1, deepcopy(start), pmoves, d)
+    obj_a.usepriors = usepriors
     mymh_a = MPM.MHRecord(obj_a,burn=burn,thin=thin)
 
     # Class 2
     start.lam = clamp(log(data2'/d),-8.0,Inf) # lam
     obj_b = MPM.MPMSampler(prior, data2, deepcopy(start), pmoves, d)
+    obj_b.usepriors = usepriors
     mymh_b = MPM.MHRecord(obj_b,burn=burn,thin=thin)
 
     OBC.BinaryClassifier(obj_a, obj_b, mymh_a, mymh_b)
@@ -168,21 +170,22 @@ function bee_e_nsum(cls::OBC.BinaryClassifier, numlam; dmean=10.0, abstol=0.03, 
     global iters = 0
     global evals = 0
     function error_1st(data)
-        points, vals = data
-        tabpoints = hcat(points...)
+        tabpoints = hcat([x.location for x in data]...)
         #points: dxn array to evaluate at
         #vals: 2xn values to store into
-        numpts = length(points)
+        numpts = length(data)
         iters += 1
         evals += numpts
         g1 = calc_g(tabpoints', db1, numlam, dmean=dmean)
         g2 = calc_g(tabpoints', db2, numlam, dmean=dmean)
+        # For c != 0.5, we'll need to multiply by c depending on which class is
+        # less
         errpts = exp(min(g1,g2))
-        for i=1:numpts
-            resize!(vals[i], 3)
-            vals[i][1] = exp(g1[i])
-            vals[i][2] = exp(g2[i])
-            vals[i][3] = errpts[i]
+        for (i,pt) in enumerate(data)
+            resize!(pt.vals, 3)
+            pt.vals[1] = exp(g1[i])
+            pt.vals[2] = exp(g2[i])
+            pt.vals[3] = errpts[i]
         end
     end
     tot1,r = NSum.nsum(3, error_1st, maxs, abstol=abstol, maxevals=maxevals)

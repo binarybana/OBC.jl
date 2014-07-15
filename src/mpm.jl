@@ -129,7 +129,6 @@ function propose(obj::MPMSampler)
     else
         scheme = wsample(range, [1., 1., 6.])
     end
-    scheme = 2
 
     if scheme == 0 # Birth
         curr.mu[:,curr.k+1] = curr.mu[:,curr.k]
