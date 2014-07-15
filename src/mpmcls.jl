@@ -168,7 +168,7 @@ function bee_e_mc(cls::OBC.BinaryClassifier; dmean=10.0, numpts=100)
     #Now classify and count up mistakes
     points = hcat(pts1,pts2)
     labels = [zeros(size(pts1,2)), ones(size(pts2,2))]
-    return sum(abs(predict(cls.mcmc1.db, cls.mcmc2.db, points') .- labels))/acc_numpts
+    return sum(abs(predict(cls.mcmc1.db, cls.mcmc2.db, points', dmean=dmean) .- labels))/acc_numpts
 end
 
 function bee_e_nsum(cls::OBC.BinaryClassifier, numlam; dmean=10.0, abstol=0.03, maxevals=30)
@@ -230,9 +230,9 @@ function bee_e_cube(data, db1, db2, numlam; dmean=10.0, abstol=0.03, maxevals=0)
     return val*0.5, err
 end
 
-function predict(db0, db1, points)
-    g0 = calc_g(points, db0, 20)
-    g1 = calc_g(points, db1, 20)
+function predict(db0, db1, points; dmean=10.0)
+    g0 = calc_g(points, db0, 20, dmean=dmean)
+    g1 = calc_g(points, db1, 20, dmean=dmean)
     return vec((g0 .- g1) .< 0) * 1
 end
 
