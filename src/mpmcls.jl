@@ -2,16 +2,14 @@
 
 function mpm_classifier(data1, data2; burn=1000, thin=50, d=100.0, usepriors=true, pmoves=MPM.MPMPropMoves())
     assert(size(data1,2) == size(data1,2))
-    kmax = 1
     D = size(data1, 2)
     cov = eye(D,D) .* 0.1
-    mu = ones(D,kmax)
-    prior = MPM.MPMPrior(D=D, kmax=kmax, kappa=10., S=eye(D)*0.05*10)
+    mu = ones(D)
+    prior = MPM.MPMPrior(D=D, kappa=10., S=eye(D)*0.05*10)
 
     # Class 1
-    start = MPM.MPMParams(mu, cov, ones(kmax)/kmax, #w 
-        clamp(log(data1'/d),-8.0,Inf), #lam 
-        1) #k :: Int
+    start = MPM.MPMParams(mu, cov, 
+        clamp(log(data1'/d),-8.0,Inf)) #lam 
     obj_a = MPM.MPMSampler(prior, data1, deepcopy(start), pmoves, d)
     obj_a.usepriors = usepriors
     mymh_a = MPM.MHRecord(obj_a,burn=burn,thin=thin)
@@ -74,7 +72,6 @@ function bee_moments(points,db1::Vector{Any}, db2::Vector{Any},
         dbpass = 0.0
         curr1 = db1[i]
         curr2 = db2[i]
-        assert(curr1.k==1 && curr2.k==1)
         rand!(MultivariateNormal(curr1.mu[:,1], curr1.sigma), lams1)
         rand!(MultivariateNormal(curr2.mu[:,1], curr2.sigma), lams2)
         for k=1:numlam*dims 
@@ -239,7 +236,7 @@ function predict(db0, db1, points; dmean=10.0)
     return vec((g0 .- g1) .< 0) * 1.0
 end
 
-function error_points(db0, db1, points, labels)
-    return sum(abs(predict(db0, db1, points) - labels))/size(labels,1)
+function error_points(cls::OBC.BinaryClassifier, points, labels)
+    return sum(abs(predict(cls.mcmc1.db, cls.mcmc2.db, points) - labels))/size(labels,1)
 end
 
