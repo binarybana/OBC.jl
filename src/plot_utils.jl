@@ -1,6 +1,6 @@
 using PyPlot
 
-function plot_traces(db, names)
+function plot_traces(db, names; save=false)
     if !issubtype(typeof(names), Array)
         names = [names]
     end
@@ -16,6 +16,9 @@ function plot_traces(db, names)
         ylabel(string(name))
         title(string(name))
         xlabel("samples")
+        if save
+            savefig("$(string(name)).png")
+        end
     end
 end
 

@@ -76,7 +76,7 @@ D = 2
 ######################################################################
 # Class 0
 ######################################################################
-#trumu, trucov, dataa, tst_dataa,lam1,lam2 = gen_data_jason(0.0)
+trumu, trucov, dataa, tst_dataa,lam1,lam2 = gen_data_jason(0.0)
 #tst_data = rand(510,D) .* 500 .+ 8
 #tst_data[:,1] = 0
 ##tst_data[:,1] = rand(0:1, 510)
@@ -86,7 +86,7 @@ D = 2
 ######################################################################
 # Class 1
 ######################################################################
-#trumub, trucovb, datab, tst_datab,_,_ = gen_data_jason(-1.0)
+trumub, trucovb, datab, tst_datab,_,_ = gen_data_jason(-1.0)
 #tst_datab = rand(510,D) .* 500 .+ 8
 #tst_datab[:,1] = 2
 ##tst_datab[:,1] = rand(0:1, 510)
