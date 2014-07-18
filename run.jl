@@ -30,7 +30,7 @@ rseed = setv(params, "rseed", rand(Uint), int)
 #seed = setv(params, "seed", 1234, int)
 seed = setv(params, "seed", rand(Uint), int)
 Ntrn = setv(params, "Ntrn", 20, int)
-Ntst = setv(params, "Ntst", 300, int)
+Ntst = setv(params, "Ntst", 500, int)
 f_glob = setv(params, "f_glob", 1, int)
 subclasses = setv(params, "subclasses", 2, int)
 f_het = setv(params, "f_het", 1, int)
@@ -70,7 +70,6 @@ function gen_data_jason(mu)
     return lmu, cov, trn_data', tst_data', lam1, lam2
 end
 
-kmax = 1
 D = 2
 
 ######################################################################
@@ -92,34 +91,17 @@ trumub, trucovb, datab, tst_datab,_,_ = gen_data_jason(-1.0)
 ##tst_datab[:,1] = rand(0:1, 510)
 #datab = tst_datab[1:10,:]
 
-errs = Float64[]
-dtries = logspace(0,3,40)
-for d=dtries
+d=10.0
 
-    cls = MPM.mpm_classifier(dataa, datab; burn=1000, thin=50, d=d, usepriors=false)
-    @time MPM.sample(cls, 10000)
-    #pts1 = MPM.gen_posterior_points(100, d, cls.mcmc1.db)
-    #pts2 = MPM.gen_posterior_points(100, d, cls.mcmc2.db)
+cls = MPM.mpm_classifier(dataa, datab; burn=1000, thin=50, d=d, usepriors=false)
+@time MPM.sample(cls, 10000)
 
-    #@time beis,r = MPM.bee_e_nsum(cls, 50)
-    @time bemc = MPM.bee_e_mc(cls, dmean=d)
-    @show bemc
-    push!(errs, bemc)
+#@time beis,r = MPM.bee_e_nsum(cls, 50)
+@time bemc = MPM.bee_e_mc(cls, dmean=d)
+@show bemc
 
-    #N = 30
-    #beis = Float64[]
-    #for i=1:N
-        #b,r = MPM.bee_e_nsum(cls, 50)
-        #push!(beis, b[3])
-    #end
-    #@show mean(beis), std(beis)
-    #beis = [MPM.bee_e_mc(cls, numpts=50) for i=1:N]
-    #@show mean(beis), std(beis)
-
-end
-
-#err = MPM.error_points(mymh_a.db, mymh_b.db, [tst_data; tst_datab], [zeros(size(tst_data,1)), ones(size(tst_datab,1))]) 
-#println("holdout error: $err")
+err = MPM.error_points(cls, [tst_dataa; tst_datab], [zeros(size(tst_dataa,1)), ones(size(tst_datab,1))]) 
+println("holdout error: $err")
 
 ######################################################################
 # Plotting
@@ -152,5 +134,5 @@ end
 #plot(data[:,1], data[:,2], "g.", alpha=0.8)
 #plot(datab[:,1], datab[:,2], "r.", alpha=0.8)
 
-reload(Pkg.dir("OBC","src","plot_utils.jl"))
-fa() = plot_traces(cls.mcmc1.db, [:mu,:sigma,:lam,:energy])
+#reload(Pkg.dir("OBC","src","plot_utils.jl"))
+#fa() = plot_traces(cls.mcmc1.db, [:mu,:sigma,:lam,:energy])
