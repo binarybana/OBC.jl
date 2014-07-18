@@ -31,9 +31,6 @@ import Distributions.sample
 
 function sample(rec::MHRecord, iters::Int; verbose=false)
     oldenergy = energy(rec.obj)
-    #dbsize = div(rec.iteration + iters - rec.burn, rec.thin)
-    #dbsize = dbsize > 0 ? dbsize : 0
-    #init_db(rec, dbsize) # FIXME
     if rec.verbose
         println("Initial energy: $oldenergy")
     end
@@ -74,7 +71,6 @@ function sample(rec::MHRecord, iters::Int; verbose=false)
         end
         rec.iteration += 1
     end
-    #save_state_db(rec, temperature) #FIXME
     if rec.verbose
         println("Accepted samples: $(rec.count_accept)")
         println("Total samples: $(rec.count_total)")
