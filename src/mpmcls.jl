@@ -170,7 +170,7 @@ function bee_e_mc(cls::OBC.BinaryClassifier; dmean=10.0, numpts=100)
 
     #Now classify and count up mistakes
     points = hcat(pts1,pts2)
-    labels = [zeros(size(pts1,2)), ones(size(pts2,2))]
+    labels = [zeros(Float64,size(pts1,2)), ones(Float64,size(pts2,2))]
     return sum(abs(predict(cls.mcmc1.db, cls.mcmc2.db, points', dmean=dmean) .- labels))/acc_numpts
 end
 
@@ -236,7 +236,7 @@ end
 function predict(db0, db1, points; dmean=10.0)
     g0 = calc_g(points, db0, 20, dmean=dmean)
     g1 = calc_g(points, db1, 20, dmean=dmean)
-    return vec((g0 .- g1) .< 0) * 1
+    return vec((g0 .- g1) .< 0) * 1.0
 end
 
 function error_points(db0, db1, points, labels)

@@ -244,10 +244,26 @@ end
 reject(obj::MPMSampler) = copy!(obj.curr, obj.old)
 
 function gen_points(n, d, pt)
-    newpts = Array(Float64, size(pt.lam,1), n)
+    local temp2, tempmv
+    D = size(pt.lam,1)
+    newpts = Array(Float64,D,n)
     # FIXME assuming single mixture
     for i=1:n
-        newpts[:,i] = map(x->rand(Poisson(d*exp(x))), rand(MultivariateNormal(pt.mu[:,1], pt.sigma)))
+        tempmv = rand(MultivariateNormal(pt.mu[:,1], pt.sigma))
+        for j=1:D
+            rate = d*exp(tempmv[j])
+            if rate > 1000
+                newpts[j,i] = rand(Normal(rate,sqrt(rate)))
+            else
+                try
+                    newpts[j,i] = rand(Poisson(rate))
+                catch x
+                    @show newpts[j,i]
+                    @show rate
+                    throw(x)
+                end
+            end
+        end
     end
 
     # Or using lams below is another way to go, but it is not ideal for getting a true
