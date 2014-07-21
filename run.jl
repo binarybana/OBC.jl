@@ -50,7 +50,7 @@ function gen_data(mu, cov, n)
     lams = rand(MultivariateNormal(mu, cov), n)
     #println("lam stats:")
     #println("$(maximum(lams)) $(minimum(lams)) $(mean(lams)) $(std(lams))")
-    ps = zeros(size(lams))
+    ps = zeros(Int, size(lams))
     for i in 1:size(lams,1)
         for j in 1:size(lams,2)
             ps[i,j] = rand(Poisson(rand(Uniform(lowd,highd)) * exp(lams[i,j])))
@@ -91,10 +91,10 @@ trumub, trucovb, datab, tst_datab,_,_ = gen_data_jason(-1.0)
 ##tst_datab[:,1] = rand(0:1, 510)
 #datab = tst_datab[1:10,:]
 
-d=10.0
+d=100.0
 
 cls = MPM.mpm_classifier(dataa, datab; burn=1000, thin=50, d=d, usepriors=false)
-@time MPM.sample(cls, 10000)
+@time MPM.sample(cls, 10000, verbose=true)
 
 #@time beis,r = MPM.bee_e_nsum(cls, 50)
 @time bemc = MPM.bee_e_mc(cls, dmean=d)
