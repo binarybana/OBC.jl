@@ -90,13 +90,13 @@ type MPMSampler <: Sampler
     curr :: MPMParams
     old :: MPMParams
     prior :: MPMPrior
-    data :: Matrix{Float64}
+    data :: Matrix{Int}
     propmoves :: MPMPropMoves
     usepriors :: Bool
     d :: Vector{Float64}
 end
 
-function MPMSampler(prior::MPMPrior, data::Matrix{Float64}, obj::MPMParams, propmoves::MPMPropMoves, d::Float64)
+function MPMSampler(prior::MPMPrior, data::Matrix{Int}, obj::MPMParams, propmoves::MPMPropMoves, d::Float64)
     @assert size(data,1) > size(data,2)
     MPMSampler(deepcopy(obj), deepcopy(obj), prior, data, propmoves, 
             true, ones(size(data,1))*d) # FIXME hardcoded d
@@ -154,7 +154,7 @@ function energy(obj::MPMSampler)
     for i in 1:size(obj.data,1)
         for j in 1:size(obj.data,2)
             accum -= logpdf(Poisson(obj.d[i] * exp(obj.curr.lam[j,i])), 
-                        floor(obj.data[i,j])) #FIXME lam and data dimensions
+                        obj.data[i,j]) #FIXME lam and data dimensions
         end
     end
     #lambdas

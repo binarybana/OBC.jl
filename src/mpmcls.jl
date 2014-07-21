@@ -13,12 +13,14 @@ function mpm_classifier(data1, data2; burn=1000, thin=50, d=100.0, usepriors=tru
     obj_a = MPM.MPMSampler(prior, data1, deepcopy(start), pmoves, d)
     obj_a.usepriors = usepriors
     mymh_a = MPM.MHRecord(obj_a,burn=burn,thin=thin)
+    #mymh_a = MPM.AMWGRecord(obj_a,burn=burn,thin=thin)
 
     # Class 2
     start.lam = clamp(log(data2'/d),-8.0,Inf) # lam
     obj_b = MPM.MPMSampler(prior, data2, deepcopy(start), pmoves, d)
     obj_b.usepriors = usepriors
     mymh_b = MPM.MHRecord(obj_b,burn=burn,thin=thin)
+    #mymh_b = MPM.AMWGRecord(obj_b,burn=burn,thin=thin)
 
     OBC.BinaryClassifier(obj_a, obj_b, mymh_a, mymh_b)
 end
@@ -168,7 +170,11 @@ function bee_e_mc(cls::OBC.BinaryClassifier; dmean=10.0, numpts=100)
     #Now classify and count up mistakes
     points = hcat(pts1,pts2)
     labels = [zeros(Float64,size(pts1,2)), ones(Float64,size(pts2,2))]
-    return sum(abs(predict(cls.mcmc1.db, cls.mcmc2.db, points', dmean=dmean) .- labels))/acc_numpts
+    errs = abs(predict(cls.mcmc1.db, cls.mcmc2.db, points', dmean=dmean) .- labels)
+    #@show errs
+    #println("Calculated $(sum(errs)) errors")
+    #@show acc_numpts
+    return sum(errs)/acc_numpts
 end
 
 function bee_e_nsum(cls::OBC.BinaryClassifier, numlam; dmean=10.0, abstol=0.03, maxevals=30)
