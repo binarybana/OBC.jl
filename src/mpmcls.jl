@@ -242,7 +242,7 @@ function predict(db0, db1, points; dmean=10.0)
     return vec((g0 .- g1) .< 0) * 1.0
 end
 
-function error_points(cls::OBC.BinaryClassifier, points, labels)
-    return sum(abs(predict(cls.mcmc1.db, cls.mcmc2.db, points) - labels))/size(labels,1)
+function error_points(cls::OBC.BinaryClassifier, points, labels; dmean=10.0)
+    return sum(abs(predict(cls.mcmc1.db, cls.mcmc2.db, points, dmean=dmean) - labels))/size(labels,1)
 end
 
