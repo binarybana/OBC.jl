@@ -7,11 +7,11 @@ using OBC
 using Cubature
 using Iterators
 using NSum
-import OBC: propose, energy, reject
+import OBC: energy, propose!, save!, reject!
 include("utils.jl")
 include("mpmcls.jl")
 
-export MPMPrior, MPMParams, MPMPropMoves, MPMSampler, calc_g, gen_points, 
+export MPMPrior, MPMParams, MPMSampler, calc_g, gen_points, 
     gen_posterior_points, calc_pvals, error_points, predict, error_moments_cube, 
     var_error_hists, e_error_hists, e_error_eff
 
@@ -68,52 +68,36 @@ function copy!(to::MPMParams, from::MPMParams)
     to.energy = from.energy
 end
 
-#draw_params(p::MPMPrior) = MPMParams(rand(Normal(p.theta_mu, p.theta_sigma)),
-
-#function draw_data(params::MPMParams, n=10)
-#end
-
 ######################################################################
 ######################################################################
 ######################################################################
 ######################################################################
-
-type MPMPropMoves
-    mumove :: Float64
-    lammove :: Float64
-    priorkappa :: Float64
-    premove :: Float64
-end
-MPMPropMoves() = MPMPropMoves(0.3, 0.1, 100.0, 0.2)
 
 type MPMSampler <: Sampler
     curr :: MPMParams
     old :: MPMParams
     prior :: MPMPrior
     data :: Matrix{Int}
-    propmoves :: MPMPropMoves
     usepriors :: Bool
     d :: Vector{Float64}
 end
 
-function MPMSampler(prior::MPMPrior, data::Matrix{Int}, obj::MPMParams, propmoves::MPMPropMoves, d::Float64)
+function MPMSampler(prior::MPMPrior, data::Matrix{Int}, obj::MPMParams, d::Float64)
     @assert size(data,1) > size(data,2)
-    MPMSampler(deepcopy(obj), deepcopy(obj), prior, data, propmoves, 
+    MPMSampler(deepcopy(obj), deepcopy(obj), prior, data, 
             true, ones(size(data,1))*d) # FIXME hardcoded d
 end
 
-function propose(obj::MPMSampler)
+const blocks = 3
+
+function propose!(obj::MPMSampler, block::Int, sigma::Float64)
     curr = obj.curr
     prior = obj.prior
-    propmoves = obj.propmoves
 
-    copy!(obj.old, curr)
+    if block == 1 #Modify means
+        curr.mu[:] += randn(prior.D) * sigma*0.1
 
-    scheme = sample(0:2)
-    if scheme == 0 #Modify means
-        curr.mu[:] += randn(prior.D) * propmoves.mumove
-
-    elseif scheme == 1
+    elseif block == 2
 
         #Modify covariances
         #temp = curr.sigma .* (0.5 .+ rand(prior.D, prior.D)) #.* curr.sigma ./ mean(curr.sigma)
@@ -123,7 +107,7 @@ function propose(obj::MPMSampler)
             #curr.sigma = temp
         #else
         for i=1:prior.D*prior.D
-            curr.sigpre[i] += rand(Normal(0.0,propmoves.premove))
+            curr.sigpre[i] += rand(Normal(0.0,sigma*0.1))
         end
         At_mul_B!(curr.sigma, curr.sigpre, curr.sigpre) # sigma = sigpre'*sigpre
 
@@ -131,24 +115,24 @@ function propose(obj::MPMSampler)
                 #curr.sigma*(propmoves.priorkappa-1-prior.D)))
         #end
 
-    elseif scheme == 2
+    elseif block == 3
         # Modify lambdas
         for i in 1:length(curr.lam) 
-            curr.lam[i] += randn() * propmoves.lammove
+            curr.lam[i] += randn() * sigma*0.1
         end
 
-    #elseif scheme == 3
+    #elseif block == 3
         #Modify di's
         #curr.d = clamp(curr.d + randn(self.n) * 0.2, 8,12) #FIXME 
 
     end
-    return scheme
+    nothing
 end
 
 import Base.sum
 sum(x::Float64) = x
 
-function energy(obj::MPMSampler)
+function energy(obj::MPMSampler, block::Int=0) #block currently unused
     accum = 0.0
     #likelihoods
     for i in 1:size(obj.data,1)
@@ -172,7 +156,8 @@ function energy(obj::MPMSampler)
     return accum
 end
     
-reject(obj::MPMSampler) = copy!(obj.curr, obj.old)
+reject!(obj::MPMSampler) = copy!(obj.curr, obj.old)
+save!(obj::MPMSampler) = copy!(obj.old, obj.curr)
 
 function gen_points(n, d, pt)
     local temp2, tempmv

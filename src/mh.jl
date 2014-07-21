@@ -1,5 +1,5 @@
 
-type MHRecord
+type MHRecord <: MCMC
     obj :: Sampler
     mapvalue :: Sampler
     mapenergy :: Float64
@@ -36,6 +36,7 @@ function sample(rec::MHRecord, iters::Int; verbose=false)
     end
 
     for current_iter = rec.iteration:(rec.iteration+iters-1)
+        save!(rec.obj)
         scheme = propose(rec.obj)
         rec.scheme_propose[scheme] = get(rec.scheme_propose, scheme, 0) + 1
         newenergy = energy(rec.obj)
@@ -55,7 +56,7 @@ function sample(rec::MHRecord, iters::Int; verbose=false)
                 println("A: old: $oldenergy, new: $newenergy, diff: $(oldenergy-newenergy)")
             end
         else #Reject
-            reject(rec.obj)
+            reject!(rec.obj)
             if verbose
                 println("R: old: $oldenergy, new: $newenergy, diff: $(oldenergy-newenergy)")
             end
@@ -80,5 +81,6 @@ end
 
 # To be overwritten
 energy(x::Sampler) = error("Must be instantiated for your sampler object")
-propose(x::Sampler) = error("Must be instantiated for your sampler object")
-reject(x::Sampler) = error("Must be instantiated for your sampler object")
+propose!(x::Sampler) = error("Must be instantiated for your sampler object")
+reject!(x::Sampler) = error("Must be instantiated for your sampler object")
+save!(x::Sampler) = error("Must be instantiated for your sampler object")

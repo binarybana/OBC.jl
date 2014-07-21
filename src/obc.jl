@@ -5,6 +5,7 @@ using Distributions
 export
     Sampler, 
     MHRecord, 
+    AMWGRecord, 
     sample, 
     #propose, 
     #energy, 
@@ -15,14 +16,16 @@ export
     #set_energy_limits,
 
 abstract Sampler
+abstract MCMC
 
 include("mh.jl")
+include("awmg.jl")
 
-type BinaryClassifier{T<:Sampler}
+type BinaryClassifier{T<:Sampler,S<:MCMC}
     cls1 :: T
     cls2 :: T
-    mcmc1 :: MHRecord
-    mcmc2 :: MHRecord
+    mcmc1 :: S
+    mcmc2 :: S
 end
 
 include("cls_utils.jl")

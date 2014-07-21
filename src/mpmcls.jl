@@ -1,6 +1,6 @@
 # Everything dealing with TWO classifier objects
 
-function mpm_classifier(data1, data2; burn=1000, thin=50, d=100.0, usepriors=true, pmoves=MPM.MPMPropMoves())
+function mpm_classifier(data1, data2; burn=1000, thin=50, d=100.0, usepriors=true)
     assert(size(data1,2) == size(data1,2))
     D = size(data1, 2)
     cov = eye(D,D) .* 0.1
@@ -10,26 +10,26 @@ function mpm_classifier(data1, data2; burn=1000, thin=50, d=100.0, usepriors=tru
     # Class 1
     start = MPM.MPMParams(mu, cov, 
         clamp(log(data1'/d),-8.0,Inf)) #lam 
-    obj_a = MPM.MPMSampler(prior, data1, deepcopy(start), pmoves, d)
+    obj_a = MPM.MPMSampler(prior, data1, deepcopy(start), d)
     obj_a.usepriors = usepriors
-    mymh_a = MPM.MHRecord(obj_a,burn=burn,thin=thin)
-    #mymh_a = MPM.AMWGRecord(obj_a,burn=burn,thin=thin)
+    #mymh_a = MPM.MHRecord(obj_a,burn=burn,thin=thin)
+    mymh_a = MPM.AMWGRecord(obj_a, blocks, burn=burn,thin=thin)
 
     # Class 2
     start.lam = clamp(log(data2'/d),-8.0,Inf) # lam
-    obj_b = MPM.MPMSampler(prior, data2, deepcopy(start), pmoves, d)
+    obj_b = MPM.MPMSampler(prior, data2, deepcopy(start), d)
     obj_b.usepriors = usepriors
-    mymh_b = MPM.MHRecord(obj_b,burn=burn,thin=thin)
-    #mymh_b = MPM.AMWGRecord(obj_b,burn=burn,thin=thin)
+    #mymh_b = MPM.MHRecord(obj_b,burn=burn,thin=thin)
+    mymh_b = MPM.AMWGRecord(obj_b, blocks, burn=burn,thin=thin)
 
     OBC.BinaryClassifier(obj_a, obj_b, mymh_a, mymh_b)
 end
 
-function sample(cls::OBC.BinaryClassifier, iters=10000)
+function sample(cls::OBC.BinaryClassifier, iters=10000; verbose=false)
     t0 = time()
-    OBC.sample(cls.mcmc1, iters)
+    OBC.sample(cls.mcmc1, iters, verbose=verbose)
     t1 = time()
-    OBC.sample(cls.mcmc2, iters)
+    OBC.sample(cls.mcmc2, iters, verbose=verbose)
     t2 = time()
     return t1-t0, t2-t1
 end
