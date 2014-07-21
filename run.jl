@@ -100,39 +100,17 @@ cls = MPM.mpm_classifier(dataa, datab; burn=1000, thin=50, d=d, usepriors=false)
 @time bemc = MPM.bee_e_mc(cls, dmean=d)
 @show bemc
 
-err = MPM.error_points(cls, [tst_dataa; tst_datab], [zeros(size(tst_dataa,1)), ones(size(tst_datab,1))]) 
+err = MPM.error_points(cls, [tst_dataa; tst_datab], [zeros(size(tst_dataa,1)), ones(size(tst_datab,1))], dmean=d) 
 println("holdout error: $err")
 
 ######################################################################
 # Plotting
 ######################################################################
 
-#include("src/plot_utils.jl")
-#mins, maxs, (lens, steps, grid) = MPM.get_grid(vcat(data,datab))
+reload(Pkg.dir("OBC","src","plot_utils.jl"))
 
-#close("all")
-
-#ga = MPM.calc_g(grid, mymh_a.db, 20)
-#ga = exp(ga.-maximum(ga))
-#imshow(reshape(ga,lens...)', extent=[mins[1],maxs[1],mins[2],maxs[2]], aspect="equal", origin="lower")
-#colorbar()
-#contour(reshape(ga,n1,n2)', extent=gext, aspect="equal", origin="lower")
-#plot(data[:,1], data[:,2], "g.", alpha=0.8)
-
-#allnodes = collect(r)
-#for n in allnodes
-    #if length(n.vals)!=0
-        #plot(n.mins[1], n.mins[2], "g.")
-    #end
-#end
-
-#figure()
-#gavg = ga - gb
-#imshow(reshape(gavg,n1,n2)', extent=gext, aspect="equal", origin="lower")
-#colorbar()
-#contour(reshape(gavg,n1,n2)', (0.0,), extent=gext, aspect="equal", origin="lower")
-#plot(data[:,1], data[:,2], "g.", alpha=0.8)
-#plot(datab[:,1], datab[:,2], "r.", alpha=0.8)
-
-#reload(Pkg.dir("OBC","src","plot_utils.jl"))
+plot_data(cls)
+figure()
+plot(tst_dataa[:,1], tst_dataa[:,2], "g.", alpha=0.8)
+plot(tst_datab[:,1], tst_datab[:,2], "r.", alpha=0.8)
 #fa() = plot_traces(cls.mcmc1.db, [:mu,:sigma,:lam,:energy])
