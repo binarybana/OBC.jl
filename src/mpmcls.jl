@@ -158,7 +158,7 @@ function bee_e_data(data, db1, db2, numlam; dmean=10.0, maxtry=10)
     bee_e_eff(g1,g2,volume)
 end
 
-function bee_e_mc(cls::OBC.BinaryClassifier; dmean=10.0, numpts=100)
+function bee_e_mc_naive(cls::OBC.BinaryClassifier; dmean=10.0, numpts=100)
     #FIXME only c=0.5
     #Generate points from each class
     pts1 = gen_posterior_points(numpts, dmean, cls.mcmc1.db)
@@ -169,10 +169,23 @@ function bee_e_mc(cls::OBC.BinaryClassifier; dmean=10.0, numpts=100)
     points = hcat(pts1,pts2)
     labels = [zeros(Float64,size(pts1,2)), ones(Float64,size(pts2,2))]
     errs = abs(predict(cls.mcmc1.db, cls.mcmc2.db, points', dmean=dmean) .- labels)
-    #@show errs
-    #println("Calculated $(sum(errs)) errors")
-    #@show acc_numpts
     return sum(errs)/acc_numpts
+end
+
+function bee_e_mc(cls::OBC.BinaryClassifier; dmean=10.0, numpts=100)
+    #FIXME only c=0.5
+    #Generate points from each class
+    pts1 = gen_posterior_points(numpts, dmean, cls.mcmc1.db)
+    pts2 = gen_posterior_points(numpts, dmean, cls.mcmc2.db)
+    acc_numpts = size(pts1,2) + size(pts2,2) # requested != generated
+    points = hcat(pts1,pts2)
+    g0 = calc_g(points', cls.mcmc1.db, 20, dmean=dmean)
+    g1 = calc_g(points', cls.mcmc2.db, 20, dmean=dmean)
+    g0 = clamp(g0, -10_000_000.0, Inf)
+    g1 = clamp(g1, -10_000_000.0, Inf)
+    z = mapslices(logsum, hcat(g0,g1), 2)
+    res = exp(logsum(min(g0,g1) .- z .- log(acc_numpts)))
+    return res
 end
 
 function bee_e_nsum(cls::OBC.BinaryClassifier, numlam; dmean=10.0, abstol=0.03, maxevals=30)
