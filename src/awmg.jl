@@ -57,7 +57,7 @@ function sample(rec::AMWGRecord, iters::Int; verbose=false, adjust="burnin")
 
         # Adjust weights
         if current_iter % rec.batchsize == 0 && ((adjust == "burnin" && current_iter <= rec.burn) || adjust == "always")
-            delta = min(0.1, (current_iter / rec.batchsize)^-0.5)
+            delta = min(0.3, (current_iter / rec.batchsize)^-0.9)
             verbose && println("Sigmas before tuning: $(rec.sigmas)")
             verbose && println("Delta: $delta")
             verbose && println("Block_accept: $(rec.block_accept)")
