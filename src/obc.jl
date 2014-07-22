@@ -19,7 +19,7 @@ abstract Sampler
 abstract MCMC
 
 include("mh.jl")
-include("awmg.jl")
+include("amwg.jl")
 
 type BinaryClassifier{T<:Sampler,S<:MCMC}
     cls1 :: T
