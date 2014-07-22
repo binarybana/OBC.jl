@@ -118,7 +118,9 @@ function propose!(obj::MPMSampler, block::Int, sigma::Float64)
     elseif block == 3
         # Modify lambdas
         for i in 1:length(curr.lam) 
-            curr.lam[i] += randn() * sigma*0.1
+            if randbool()
+                curr.lam[i] += randn() * sigma*0.1
+            end
         end
 
     #elseif block == 3
@@ -150,7 +152,7 @@ function energy(obj::MPMSampler, block::Int=0) #block currently unused
         accum -= logpdf(InverseWishart(obj.prior.kappa, obj.prior.S), obj.curr.sigma)
         # mu
         accum -= sum(logpdf(
-            DiagNormal(obj.prior.mu[:,k], obj.prior.mu_sigmas), obj.curr.mu[:,k]))
+            DiagNormal(obj.prior.mu, obj.prior.mu_sigmas), obj.curr.mu))
     end
     obj.curr.energy = accum
     return accum

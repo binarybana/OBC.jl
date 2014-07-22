@@ -37,10 +37,8 @@ end
 function acceptance_rates(cls::OBC.BinaryClassifier)
     mc1,mc2 = cls.mcmc1, cls.mcmc2
     accs = Dict{String,Any}()
-    accs["1"] = mc1.count_accept / mc1.count_total
-    accs["2"] = mc2.count_accept / mc2.count_total
-    accs["s1"] = [(k=>(get(mc1.scheme_accept,k,0)/mc1.scheme_propose[k])) for k in keys(mc1.scheme_propose)]
-    accs["s2"] = [(k=>(get(mc2.scheme_accept,k,0)/mc2.scheme_propose[k])) for k in keys(mc2.scheme_propose)]
+    accs["1"] = cls.mcmc1.block_accept
+    accs["2"] = cls.mcmc2.block_accept
     return accs
 end
 
