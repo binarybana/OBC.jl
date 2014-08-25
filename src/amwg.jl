@@ -15,6 +15,9 @@ type AMWGRecord <: MCMC
     thin :: Int
 end
 
+import Base: length
+length(x::AMWGRecord) = length(x.db)
+
 AMWGRecord(obj::Sampler, blocks; burn=0, thin=1) = AMWGRecord(deepcopy(obj), 
                                 blocks, #Gibbs updates
                                 50, # batchsize

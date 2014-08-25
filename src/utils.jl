@@ -1,3 +1,42 @@
+function gelman_rubin(samplers)
+    # parameters in db must be scalars, vectors or matrices
+
+    m = length(samplers)
+    n = length(samplers[1])
+
+    assert(all((map(length,samplers) .- n).==0)) # ... for now
+
+    paramnames = names(samplers[1].db[1])
+    dnostics = Dict()
+    for p in paramnames
+        p == :energy && continue
+        ex = getfield(samplers[1].db[1],p)
+        extype = typeof(ex)
+
+        if extype <: Number
+            # vector of vectors
+            posts = [convert(Vector{extype}, map(y->getfield(y,p), x.db)) for x in samplers]
+        elseif ndims(ex) == 1
+            # vector of matrices
+            posts = [vcat(map(y->getfield(y,p)', x.db)...) for x in samplers]
+        elseif ndims(ex) == 2
+            # vector of matrices
+            posts = [vcat(map(y->vec(getfield(y,p))', x.db)...) for x in samplers]
+        end
+
+        # Dims: [chain] X [iteration X params]
+
+        vars = vcat(map(x->var(x,1), posts)...)
+        means = vcat(map(x->mean(x,1), posts)...)
+        # Dims: [chain X params]
+        W = mean(vars,1)
+        B_jk = var(means,1)
+        # Dims: [params]
+        dnostics[string(p)] = vec(sqrt(((n-1)/n .* W .+ B_jk) ./ W))
+    end
+    return dnostics
+end
+
 function logsum(x::AbstractArray)
     if length(x) == 1
         return x[1]

@@ -1,7 +1,7 @@
 module SAMC
 
 using Distributions 
-import OBC: Sampler, propose, energy, reject, logsum
+import OBC: Sampler, propose!, energy, reject!, logsum
 
 export SAMCRecord, set_energy_limits
 

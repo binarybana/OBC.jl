@@ -29,7 +29,7 @@ num_feat = setv(params, "num_feat", 2, int)
 rseed = setv(params, "rseed", rand(Uint), int)
 #seed = setv(params, "seed", 1234, int)
 seed = setv(params, "seed", rand(Uint), int)
-Ntrn = setv(params, "Ntrn", 20, int)
+Ntrn = setv(params, "Ntrn", 5, int)
 Ntst = setv(params, "Ntst", 500, int)
 f_glob = setv(params, "f_glob", 1, int)
 subclasses = setv(params, "subclasses", 2, int)
@@ -91,26 +91,47 @@ trumub, trucovb, datab, tst_datab,_,_ = gen_data_jason(-1.0)
 ##tst_datab[:,1] = rand(0:1, 510)
 #datab = tst_datab[1:10,:]
 
-d=100.0
+#d=100.0
+d1 = ones(Ntrn)*100.0 .+ randn(Ntrn)*10
+d2 = ones(Ntrn)*100.0 .+ randn(Ntrn)*10
+dataa .*= d1 ./ 100.0
+datab .*= d2 ./ 100.0
+dmean1,dmean2 = mean(d1),mean(d2)
+dmean = mean([dmean1,dmean2])
 
-cls = MPM.mpm_classifier(dataa, datab; burn=1000, thin=50, d=d, usepriors=false)
-@time MPM.sample(cls, 10000, verbose=true)
-
-#@time beis,r = MPM.bee_e_nsum(cls, 50)
-@time bemc = MPM.bee_e_mc(cls, dmean=d)
-@show bemc
-
-err = MPM.error_points(cls, [tst_dataa; tst_datab], [zeros(size(tst_dataa,1)), ones(size(tst_datab,1))], dmean=d) 
+cls = MPM.mpm_classifier(dataa, datab, burn=1000, thin=50, d1=d1, d2=d2, usepriors=false)
+@time MPM.sample(cls, 10000)#, verbose=true)
+@show bemc = MPM.bee_e_mc(cls, (dmean1,dmean2))
+@show beem1,beem2 = MPM.bee_moments(cls, (dmean1,dmean2))
+err = MPM.error_points(cls, [tst_dataa; tst_datab], [zeros(size(tst_dataa,1)), ones(size(tst_datab,1))], dmean=dmean) 
 println("holdout error: $err")
 
+cls = MPM.mpm_classifier(dataa, datab, burn=1000, thin=50, d1=dmean, d2=dmean, usepriors=false)
+@time MPM.sample(cls, 10000)#, verbose=true)
+@show bemc = MPM.bee_e_mc(cls, dmean=dmean)
+@show beem1,beem2 = MPM.bee_moments(cls, dmean=dmean)
+
+#for i=1:2
+    #@time bemc = MPM.bee_e_mc(cls, dmean=dmean)
+    #@time beem1,beem2 = MPM.bee_moments(cls, dmean=dmean)
+
+    #@show bemc
+    #@show beem1, beem2
+    #@show beemse = beem2 - beem1^2
+#end
+
+err = MPM.error_points(cls, [tst_dataa; tst_datab], [zeros(size(tst_dataa,1)), ones(size(tst_datab,1))], dmean=dmean) 
+println("holdout error: $err")
+
+#dnostics = OBC.gelman_rubin(samplers)
 ######################################################################
 # Plotting
 ######################################################################
 
-reload(Pkg.dir("OBC","src","plot_utils.jl"))
+#reload(Pkg.dir("OBC","src","plot_utils.jl"))
 
-plot_data(cls)
-figure()
-plot(tst_dataa[:,1], tst_dataa[:,2], "g.", alpha=0.8)
-plot(tst_datab[:,1], tst_datab[:,2], "r.", alpha=0.8)
+#plot_data(cls)
+#figure()
+#plot(tst_dataa[:,1], tst_dataa[:,2], "g.", alpha=0.8)
+#plot(tst_datab[:,1], tst_datab[:,2], "r.", alpha=0.8)
 #fa() = plot_traces(cls.mcmc1.db, [:mu,:sigma,:lam,:energy])

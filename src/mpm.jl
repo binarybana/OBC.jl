@@ -82,10 +82,16 @@ type MPMSampler <: Sampler
     d :: Vector{Float64}
 end
 
-function MPMSampler(prior::MPMPrior, data::Matrix{Int}, obj::MPMParams, d::Float64)
+function MPMSampler(prior::MPMPrior, data::Matrix, obj::MPMParams, d::Float64)
+    MPMSampler(prior, data, obj, d*ones(size(data,1)))
+end
+
+function MPMSampler(prior::MPMPrior, data::Matrix, obj::MPMParams, d::Vector{Float64})
     @assert size(data,1) > size(data,2)
-    MPMSampler(deepcopy(obj), deepcopy(obj), prior, data, 
-            true, ones(size(data,1))*d) # FIXME hardcoded d
+    if !(eltype(data) <: Integer)
+        warn("Data is being truncated from type $(eltype(data)) to Int, dataloss might occur")
+    end
+    MPMSampler(deepcopy(obj), deepcopy(obj), prior, int(data), true, d)
 end
 
 const blocks = 3
@@ -137,11 +143,9 @@ sum(x::Float64) = x
 function energy(obj::MPMSampler, block::Int=0) #block currently unused
     accum = 0.0
     #likelihoods
-    for i in 1:size(obj.data,1)
-        for j in 1:size(obj.data,2)
-            accum -= logpdf(Poisson(obj.d[i] * exp(obj.curr.lam[j,i])), 
-                        obj.data[i,j]) #FIXME lam and data dimensions
-        end
+    for i in 1:size(obj.data,1), j in 1:size(obj.data,2)
+        accum -= logpdf(Poisson(obj.d[i] * exp(obj.curr.lam[j,i])), 
+                    obj.data[i,j])
     end
     #lambdas
     accum -= sum(logpdf(MultivariateNormal(obj.curr.mu, obj.curr.sigma), obj.curr.lam)) 
@@ -161,7 +165,7 @@ end
 reject!(obj::MPMSampler) = copy!(obj.curr, obj.old)
 save!(obj::MPMSampler) = copy!(obj.old, obj.curr)
 
-function gen_points(n, d, pt)
+function gen_points(n, dmean, pt)
     local temp2, tempmv
     D = size(pt.lam,1)
     newpts = Array(Float64,D,n)
@@ -169,7 +173,7 @@ function gen_points(n, d, pt)
     for i=1:n
         tempmv = rand(MultivariateNormal(pt.mu, pt.sigma))
         for j=1:D
-            rate = d*exp(tempmv[j])
+            rate = dmean*exp(tempmv[j])
             if rate > 1000
                 newpts[j,i] = rand(Normal(rate,sqrt(rate)))
             else
@@ -194,12 +198,12 @@ function gen_points(n, d, pt)
     return newpts
 end
 
-function gen_posterior_points(n, d, posterior)
+function gen_posterior_points(n, dmean, posterior)
     npost = length(posterior)
     nper = iceil(n/npost)
     pts = Array(Float64, size(posterior[1].lam, 1), nper*npost)
     for i in 1:npost
-        pts[:, (i-1)*nper+1:i*nper] = gen_points(nper, d, posterior[i])
+        pts[:, (i-1)*nper+1:i*nper] = gen_points(nper, dmean, posterior[i])
     end
     return pts
 end
@@ -228,6 +232,8 @@ function calc_pvals(Ts, points, db, d=10.0)
 end
 
 function calc_g(points, db, numlam; dmean=10.0)
+    # Note: dmean here could actually be d if we knew valid values of d for
+    # each point we are calculating the effective density for
     numpts = size(points, 1)
     dims = size(points, 2)
     dblen = length(db)
@@ -257,6 +263,21 @@ function calc_g(points, db, numlam; dmean=10.0)
         end
     end
     return log(res / length(db))
+end
+
+# Utility convenience function
+function mpm_model(data; burn=1000, thin=50, d=100.0, usepriors=true)
+    D = size(data, 2)
+    cov = eye(D,D) .* 0.1
+    mu = ones(D)
+    prior = MPM.MPMPrior(D=D, kappa=10., S=eye(D)*0.05*10)
+
+    start = MPM.MPMParams(mu, cov, 
+        clamp(log(data'/d),-8.0,Inf)) #lam 
+    obj = MPM.MPMSampler(prior, data, deepcopy(start), d)
+    obj.usepriors = usepriors
+    #mymh_a = MPM.MHRecord(obj_a,burn=burn,thin=thin)
+    return MPM.AMWGRecord(obj, blocks, burn=burn,thin=thin)
 end
 
 end

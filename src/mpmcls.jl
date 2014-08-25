@@ -1,6 +1,6 @@
 # Everything dealing with TWO classifier objects
 
-function mpm_classifier(data1, data2; burn=1000, thin=50, d=100.0, usepriors=true)
+function mpm_classifier(data1, data2; burn=1000, thin=50, d1=100.0, d2=100.0, usepriors=true)
     assert(size(data1,2) == size(data1,2))
     D = size(data1, 2)
     cov = eye(D,D) .* 0.1
@@ -9,15 +9,15 @@ function mpm_classifier(data1, data2; burn=1000, thin=50, d=100.0, usepriors=tru
 
     # Class 1
     start = MPM.MPMParams(mu, cov, 
-        clamp(log(data1'/d),-8.0,Inf)) #lam 
-    obj_a = MPM.MPMSampler(prior, data1, deepcopy(start), d)
+        clamp(log(data1./d1)',-8.0,Inf)) #lam 
+    obj_a = MPM.MPMSampler(prior, data1, deepcopy(start), d1)
     obj_a.usepriors = usepriors
     #mymh_a = MPM.MHRecord(obj_a,burn=burn,thin=thin)
     mymh_a = MPM.AMWGRecord(obj_a, blocks, burn=burn,thin=thin)
 
     # Class 2
-    start.lam = clamp(log(data2'/d),-8.0,Inf) # lam
-    obj_b = MPM.MPMSampler(prior, data2, deepcopy(start), d)
+    start.lam = clamp(log(data2./d2)',-8.0,Inf) # lam
+    obj_b = MPM.MPMSampler(prior, data2, deepcopy(start), d2)
     obj_b.usepriors = usepriors
     #mymh_b = MPM.MHRecord(obj_b,burn=burn,thin=thin)
     mymh_b = MPM.AMWGRecord(obj_b, blocks, burn=burn,thin=thin)
@@ -34,6 +34,21 @@ function sample(cls::OBC.BinaryClassifier, iters=10000; verbose=false)
     return t1-t0, t2-t1
 end
 
+import Base: vcat 
+
+function vcat(xs::OBC.BinaryClassifier...)
+    x = xs[1]
+    for y in xs[2:end]
+        append!(x.mcmc1.db, y.mcmc1.db)
+        append!(x.mcmc2.db, y.mcmc2.db)
+    end
+    return x
+end
+
+function gelman_rubin(samplers::Vector{OBC.BinaryClassifier})
+    return [gelman_rubin([x.mcmc1 for x in samplers]), gelman_rubin([x.mcmc1 for x in samplers])]
+end
+
 function acceptance_rates(cls::OBC.BinaryClassifier)
     mc1,mc2 = cls.mcmc1, cls.mcmc2
     accs = Dict{String,Any}()
@@ -42,66 +57,98 @@ function acceptance_rates(cls::OBC.BinaryClassifier)
     return accs
 end
 
-function bee_moments(points,db1::Vector{Any},db2::Vector{Any},numlam,volume;dmean=10.0)
-    # FIXME This is only valid for c=0.5
-    g1 = calc_g(points, db1, numlam)
-    g2 = calc_g(points, db2, numlam)
-    bee_moments(points,db1,db2,g1,g2,numlam,volume,dmean=dmean)
+function bee_moments(cls::OBC.BinaryClassifier; dmean=10.0, numlam=20, numpts=20)
+    bee_moments(cls, (dmean,dmean), numlam=numlam, numpts=numpts)
 end
 
-function bee_moments(points,db1::Vector{Any}, db2::Vector{Any}, 
-        g1::Vector{Float64},g2::Vector{Float64},numlam,volume;dmean=10.0)
+function bee_moments(cls::OBC.BinaryClassifier, dmeans::NTuple{2,Float64}; numlam=20, numpts=20)
     # FIXME This is only valid for c=0.5
-    bee = exp(logsum(min(g1,g2) .+ log(volume)))*0.5
-    numpts = size(points, 1)
-    dims = size(points,2)
-    dblen = length(db1)
-    assert(length(db1) == length(db2))
+    dmean1,dmean2 = dmeans
 
-    lams1 = Array(Float64, dims, numlam)
-    lams2 = Array(Float64, dims, numlam)
-    llams1 = Array(Float64, dims, numlam)
-    llams2 = Array(Float64, dims, numlam)
-    rlams1 = Array(Float64, dims, numlam)
-    rlams2 = Array(Float64, dims, numlam)
-    bee2 = dbpass = 0.0
-    points = points'
-    lgpoints = lgamma(points .+ 1)
+    db1 = cls.mcmc1.db
+    db2 = cls.mcmc2.db
+    assert(length(db1) == length(db2))
+    dblen = length(db1)
+    dim = length(db1[1].mu)
+    points = Array(Int, dim, numpts*2)
+    lamsx1 = Array(Float64, dim, numpts)
+    lamsx2 = Array(Float64, dim, numpts)
+    lams1 = Array(Float64, dim, numlam)
+    lams2 = Array(Float64, dim, numlam)
+    llams1 = Array(Float64, dim, numlam)
+    llams2 = Array(Float64, dim, numlam)
+    rlams1 = Array(Float64, dim, numlam)
+    rlams2 = Array(Float64, dim, numlam)
+
+    beem1 = beem2 = 0.0
 
     for i in 1:dblen 
         dbpass = 0.0
+        #dbpass = 0.0
         curr1 = db1[i]
         curr2 = db2[i]
-        rand!(MultivariateNormal(curr1.mu[:,1], curr1.sigma), lams1)
-        rand!(MultivariateNormal(curr2.mu[:,1], curr2.sigma), lams2)
-        for k=1:numlam*dims 
-            rlams1[k] = dmean * exp(lams1[k])
-            llams1[k] = log(dmean) + lams1[k]
-            rlams2[k] = dmean * exp(lams2[k])
-            llams2[k] = log(dmean) + lams2[k]
+        # Generate x values (from lams or from new lams?)
+        rand!(MultivariateNormal(curr1.mu, curr1.sigma), lamsx1)
+        rand!(MultivariateNormal(curr2.mu, curr2.sigma), lamsx2)
+
+        if any(lamsx1 .> 35) || any(lamsx2 .> 35)
+            #warn("Encountered lambda value greater than 35, skipping iteration")
+            continue
         end
-        for j in 1:numpts # each point
+
+        for i=1:dim, j=1:numpts
+            points[i,j] = rand(Poisson(dmean1*exp(lamsx1[i,j])))
+            points[i,j+numpts] = rand(Poisson(dmean2*exp(lamsx2[i,j])))
+        end
+
+        g1 = calc_g(points', db1, numlam, dmean=dmean1)
+        g2 = calc_g(points', db2, numlam, dmean=dmean2)
+        g1 = clamp(g1, -10_000_000.0, Inf)
+        g2 = clamp(g2, -10_000_000.0, Inf)
+
+        # Now compute p(y|x,\theta)
+        rand!(MultivariateNormal(curr1.mu, curr1.sigma), lams1)
+        rand!(MultivariateNormal(curr2.mu, curr2.sigma), lams2)
+        for k=1:numlam*dim
+            rlams1[k] = dmean1 * exp(lams1[k])
+            llams1[k] = log(dmean1) + lams1[k]
+            rlams2[k] = dmean2 * exp(lams2[k])
+            llams2[k] = log(dmean2) + lams2[k]
+        end
+        for j in 1:numpts*2 # each point
             accumlam1 = 0.0
             accumlam2 = 0.0
+            #accumlam1 = -Inf
+            #accumlam2 = -Inf
             for s in 1:numlam # each lambda
                 accumD1 = 0.0
                 accumD2 = 0.0
-                for d in 1:dims # each dimension
-                    accumD1 += points[d,j]*llams1[d,s] - rlams1[d,s] - lgpoints[d,j]
-                    accumD2 += points[d,j]*llams2[d,s] - rlams2[d,s] - lgpoints[d,j]
+                for d in 1:dim # each dimension
+                    accumD1 += points[d,j]*llams1[d,s] - rlams1[d,s] - lgamma(points[d,j]+1)
+                    accumD2 += points[d,j]*llams2[d,s] - rlams2[d,s] - lgamma(points[d,j]+1)
                 end
                 accumlam1 += exp(accumD1)
                 accumlam2 += exp(accumD2)
+                #accumlam1 = accumlam1 == -Inf ? accumD1 : logsum(accumlam1, accumD1)
+                #accumlam2 = accumlam2 == -Inf ? accumD2 : logsum(accumlam2, accumD2)
             end
-            temp = g1[j] < g2[j] ? accumlam1 : accumlam2
-            #temp = accumlam1 # for testing purposes
-            dbpass += temp
+            temp = g1[j] < g2[j] ? accumlam1 : accumlam2 #FIXME c!=0.5
+            z = accumlam1 + accumlam2 #FIXME c!=0.5
+            if z != 0.0
+                dbpass += temp/z #FIXME c!=0.5
+            end
+            #z = logsum(accumlam1, accumlam2)
+            #@show exp(temp-z)
+            #dbpass = dbpass == -Inf ? temp-z : logsum(dbpass,temp-z) #FIXME c!=0.5
+            #dbpass += exp(temp-z)
         end
-        temp = 0.5*dbpass/numlam*volume
-        bee2 += temp^2
+        temp = dbpass/numpts/2 #FIXME c!=0.5
+        beem1 += temp
+        beem2 += temp^2
     end
-    bee2 /= dblen
-    return bee, bee2
+    beem1 /= dblen
+    beem2 /= dblen
+    return beem1, beem2
 end
 
 function bee_e_eff(g0, g1, volume)
@@ -173,14 +220,19 @@ function bee_e_mc_naive(cls::OBC.BinaryClassifier; dmean=10.0, numpts=100)
 end
 
 function bee_e_mc(cls::OBC.BinaryClassifier; dmean=10.0, numpts=100)
+    bee_e_mc(cls, (dmean,dmean), numpts=numpts)
+end
+
+function bee_e_mc(cls::OBC.BinaryClassifier, dmeans::NTuple{2,Float64}; numpts=100)
     #FIXME only c=0.5
     #Generate points from each class
-    pts1 = gen_posterior_points(numpts, dmean, cls.mcmc1.db)
-    pts2 = gen_posterior_points(numpts, dmean, cls.mcmc2.db)
+    dmean1,dmean2 = dmeans
+    pts1 = gen_posterior_points(numpts, dmean1, cls.mcmc1.db)
+    pts2 = gen_posterior_points(numpts, dmean2, cls.mcmc2.db)
     acc_numpts = size(pts1,2) + size(pts2,2) # requested != generated
     points = hcat(pts1,pts2)
-    g0 = calc_g(points', cls.mcmc1.db, 20, dmean=dmean)
-    g1 = calc_g(points', cls.mcmc2.db, 20, dmean=dmean)
+    g0 = calc_g(points', cls.mcmc1.db, 20, dmean=dmean1)
+    g1 = calc_g(points', cls.mcmc2.db, 20, dmean=dmean2)
     g0 = clamp(g0, -10_000_000.0, Inf)
     g1 = clamp(g1, -10_000_000.0, Inf)
     z = mapslices(logsum, hcat(g0,g1), 2)
