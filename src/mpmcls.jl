@@ -1,11 +1,11 @@
 # Everything dealing with TWO classifier objects
 
-function mpm_classifier(data1, data2; burn=1000, thin=50, d1=100.0, d2=100.0, usepriors=true)
+function mpm_classifier(data1, data2; burn=1000, thin=50, d1=100.0, d2=100.0, kappa=10.0, usepriors=true)
     assert(size(data1,2) == size(data1,2))
     D = size(data1, 2)
     cov = eye(D,D) .* 0.1
     mu = ones(D)
-    prior = MPM.MPMPrior(D=D, kappa=10., S=eye(D)*0.05*10)
+    prior = MPM.MPMPrior(D=D, kappa=kappa, S=eye(D)*0.05*10)
 
     # Class 1
     start = MPM.MPMParams(mu, cov, 
@@ -238,6 +238,59 @@ function bee_e_mc(cls::OBC.BinaryClassifier, dmeans::NTuple{2,Float64}; numpts=1
     z = mapslices(logsum, hcat(g0,g1), 2)
     res = exp(logsum(min(g0,g1) .- z .- log(acc_numpts)))
     return res
+end
+
+bee_moments_2sample(cls::OBC.BinaryClassifier; dmean=10.0, numpts=100) = bee_moments_2sample(cls, (dmean,dmean), numpts=numpts)
+
+function bee_moments_2sample(cls::OBC.BinaryClassifier, dmeans::NTuple{2,Float64}; numpts=100)
+    #FIXME only c=0.5
+    #Generate points from each class
+    dmean1,dmean2 = dmeans
+    pts1a = gen_posterior_points(numpts, dmean1, cls.mcmc1.db)
+    pts1b = gen_posterior_points(numpts, dmean1, cls.mcmc1.db)
+    pts2a = gen_posterior_points(numpts, dmean2, cls.mcmc2.db)
+    pts2b = gen_posterior_points(numpts, dmean2, cls.mcmc2.db)
+
+    @assert size(pts1a,2) == size(pts1b,2)
+    @assert size(pts2a,2) == size(pts2b,2)
+
+    acc_numpts = size(pts1a,2) + size(pts2a,2) # requested != generated
+    pointsa = hcat(pts1a,pts2a)
+    pointsb = hcat(pts1b,pts2b)
+    g1a = calc_g(pointsa', cls.mcmc1.db, 20, dmean=dmean1)
+    g1b = calc_g(pointsb', cls.mcmc1.db, 20, dmean=dmean1)
+    g2a = calc_g(pointsa', cls.mcmc2.db, 20, dmean=dmean2)
+    g2b = calc_g(pointsb', cls.mcmc2.db, 20, dmean=dmean2)
+
+    g1a = clamp(g1a, -10_000_000.0, Inf)
+    g1b = clamp(g1b, -10_000_000.0, Inf)
+    g2a = clamp(g2a, -10_000_000.0, Inf)
+    g2b = clamp(g2b, -10_000_000.0, Inf)
+
+    #agree = ~((g1a .< g2a) $ (g1b .< g2b))
+    agree(x,y) = ~(x $ y)
+    labela = (g1a .< g2a)
+    labelb = (g1b .< g2b)
+
+    za = [logsum(g1a[i],g2a[i]) for i=1:acc_numpts]
+    zb = [logsum(g1b[i],g2b[i]) for i=1:acc_numpts]
+
+    lpyx = min(g1a,g2a) .- za
+    lpyz = min(g1b,g2b) .- zb
+
+    ## BEE calculation
+    bee = exp(logsum(vcat(lpyx,lpyz)) - log(acc_numpts*2))
+
+    ## BEE second moment
+    bee2 = -Inf
+    for i=1:acc_numpts, j=1:acc_numpts
+        if agree(labela[i],labelb[j])
+            bee2 = logsum(bee2, lpyx[i] + lpyz[j])
+        end
+    end
+    bee2 = exp(bee2 - log(acc_numpts))
+
+    return bee, bee2, bee2 - bee^2
 end
 
 function bee_e_nsum(cls::OBC.BinaryClassifier, numlam; dmean=10.0, abstol=0.03, maxevals=30)

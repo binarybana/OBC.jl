@@ -24,12 +24,12 @@ function setv(p,s,d,conv=None)
     end
 end
 
-iters = setv(params, "iters", int(1e4), int)
+iters = setv(params, "iters", int(3e3), int)
 num_feat = setv(params, "num_feat", 2, int)
 rseed = setv(params, "rseed", rand(Uint), int)
 #seed = setv(params, "seed", 1234, int)
 seed = setv(params, "seed", rand(Uint), int)
-Ntrn = setv(params, "Ntrn", 5, int)
+Ntrn = setv(params, "Ntrn", 10, int)
 Ntst = setv(params, "Ntst", 500, int)
 f_glob = setv(params, "f_glob", 1, int)
 subclasses = setv(params, "subclasses", 2, int)
@@ -70,7 +70,7 @@ function gen_data_jason(mu)
     return lmu, cov, trn_data', tst_data', lam1, lam2
 end
 
-D = 2
+D = num_feat
 
 ######################################################################
 # Class 0
@@ -99,17 +99,47 @@ datab .*= d2 ./ 100.0
 dmean1,dmean2 = mean(d1),mean(d2)
 dmean = mean([dmean1,dmean2])
 
-cls = MPM.mpm_classifier(dataa, datab, burn=1000, thin=50, d1=d1, d2=d2, usepriors=false)
+cls = MPM.mpm_classifier(dataa, datab, burn=1000, thin=50, d1=d1, d2=d2, kappa=50.0, usepriors=true)
 @time MPM.sample(cls, 10000)#, verbose=true)
-@show bemc = MPM.bee_e_mc(cls, (dmean1,dmean2))
+@show bemc = MPM.bee_e_mc(cls, (dmean1,dmean2),numpts=50)
+@show bemc = MPM.bee_e_mc(cls, (dmean1,dmean2),numpts=50)
 @show beem1,beem2 = MPM.bee_moments(cls, (dmean1,dmean2))
-err = MPM.error_points(cls, [tst_dataa; tst_datab], [zeros(size(tst_dataa,1)), ones(size(tst_datab,1))], dmean=dmean) 
-println("holdout error: $err")
+@show beem1,beem2 = MPM.bee_moments(cls, (dmean1,dmean2))
+@show MPM.bee_moments_2sample(cls, (dmean1,dmean2),numpts=50)
+@show MPM.bee_moments_2sample(cls, (dmean1,dmean2),numpts=50)
 
-cls = MPM.mpm_classifier(dataa, datab, burn=1000, thin=50, d1=dmean, d2=dmean, usepriors=false)
-@time MPM.sample(cls, 10000)#, verbose=true)
-@show bemc = MPM.bee_e_mc(cls, dmean=dmean)
-@show beem1,beem2 = MPM.bee_moments(cls, dmean=dmean)
+#function project!(obj::MPM.MPMParams, sel)
+    #obj.mu = obj.mu[sel]
+    #obj.sigma = obj.sigma[sel,sel]
+    #obj.sigpre = obj.sigpre[sel,sel]
+    #obj.lam = obj.lam[sel,:]
+    #return obj
+#end
+
+#function project(cls::OBC.BinaryClassifier,sel)
+    #subcls = deepcopy(cls)
+    #map!(x->project!(x,sel), subcls.mcmc1.db)
+    #map!(x->project!(x,sel), subcls.mcmc2.db)
+    #project!(subcls.cls1.curr,sel)
+    #project!(subcls.cls1.old,sel)
+    #project!(subcls.cls2.curr,sel)
+    #project!(subcls.cls2.old,sel)
+    #return subcls
+#end
+
+#for sel = combinations(1:3,2)
+    #subcls = project(cls,sel)
+    #@show sel
+    #@show bemc = MPM.bee_e_mc(subcls, (dmean1,dmean2))
+#end
+
+#err = MPM.error_points(cls, [tst_dataa; tst_datab], [zeros(size(tst_dataa,1)), ones(size(tst_datab,1))], dmean=dmean) 
+#println("holdout error: $err")
+
+#cls = MPM.mpm_classifier(dataa, datab, burn=1000, thin=50, d1=dmean, d2=dmean, usepriors=false)
+#@time MPM.sample(cls, 10000)#, verbose=true)
+#@show bemc = MPM.bee_e_mc(cls, dmean=dmean)
+#@show beem1,beem2 = MPM.bee_moments(cls, dmean=dmean)
 
 #for i=1:2
     #@time bemc = MPM.bee_e_mc(cls, dmean=dmean)
@@ -120,18 +150,6 @@ cls = MPM.mpm_classifier(dataa, datab, burn=1000, thin=50, d1=dmean, d2=dmean, u
     #@show beemse = beem2 - beem1^2
 #end
 
-err = MPM.error_points(cls, [tst_dataa; tst_datab], [zeros(size(tst_dataa,1)), ones(size(tst_datab,1))], dmean=dmean) 
-println("holdout error: $err")
+#err = MPM.error_points(cls, [tst_dataa; tst_datab], [zeros(size(tst_dataa,1)), ones(size(tst_datab,1))], dmean=dmean) 
+#println("holdout error: $err")
 
-#dnostics = OBC.gelman_rubin(samplers)
-######################################################################
-# Plotting
-######################################################################
-
-#reload(Pkg.dir("OBC","src","plot_utils.jl"))
-
-#plot_data(cls)
-#figure()
-#plot(tst_dataa[:,1], tst_dataa[:,2], "g.", alpha=0.8)
-#plot(tst_datab[:,1], tst_datab[:,2], "r.", alpha=0.8)
-#fa() = plot_traces(cls.mcmc1.db, [:mu,:sigma,:lam,:energy])
