@@ -101,8 +101,8 @@ function bee_moments(cls::OBC.BinaryClassifier, dmeans::NTuple{2,Float64}; numla
             points[i,j+numpts] = rand(Poisson(dmean2*exp(lamsx2[i,j])))
         end
 
-        g1 = calc_g(points', db1, numlam, dmean=dmean1)
-        g2 = calc_g(points', db2, numlam, dmean=dmean2)
+        g1 = calc_g(points, db1, numlam, dmean=dmean1)
+        g2 = calc_g(points, db2, numlam, dmean=dmean2)
         g1 = clamp(g1, -10_000_000.0, Inf)
         g2 = clamp(g2, -10_000_000.0, Inf)
 
@@ -142,34 +142,13 @@ function bee_moments(cls::OBC.BinaryClassifier, dmeans::NTuple{2,Float64}; numla
             #dbpass = dbpass == -Inf ? temp-z : logsum(dbpass,temp-z) #FIXME c!=0.5
             #dbpass += exp(temp-z)
         end
-        temp = dbpass/numpts/2 #FIXME c!=0.5
+        temp = dbpass/numpts/2 #FIXME c!=0.5 AND CHECK 4 constant
         beem1 += temp
         beem2 += temp^2
     end
     beem1 /= dblen
     beem2 /= dblen
     return beem1, beem2
-end
-
-function bee_e_eff(g0, g1, volume)
-    # FIXME This is only valid for c=0.5
-    # Calculate expectation of error given the two effective class conditional
-    # densities (posterior predictive densities)
-    exp(logsum(min(g0,g1) .+ log(volume)))*0.5
-end
-
-function bee_e_grid(points, db1, db2, numlam, volume; dmean=10.0)
-    # FIXME This is only valid for c=0.5
-    g1 = calc_g(points, db1, numlam, dmean=dmean)
-    g2 = calc_g(points, db2, numlam, dmean=dmean)
-    bee_e_eff(g1,g2,volume)
-end
-
-function bee_e_data_grid(data, db1, db2, numlam; dmean=10.0)
-    mins,maxs = get_bbox(data)
-    lens,steps,points = gen_unit_grid(mins,maxs)
-    println("Num points: $(size(points)), maxs: $maxs")
-    bee_e_grid(points, db1, db2, numlam, prod(steps))
 end
 
 function bee_e_data(data, db1, db2, numlam; dmean=10.0, maxtry=10)
@@ -205,20 +184,6 @@ function bee_e_data(data, db1, db2, numlam; dmean=10.0, maxtry=10)
     bee_e_eff(g1,g2,volume)
 end
 
-function bee_e_mc_naive(cls::OBC.BinaryClassifier; dmean=10.0, numpts=100)
-    #FIXME only c=0.5
-    #Generate points from each class
-    pts1 = gen_posterior_points(numpts, dmean, cls.mcmc1.db)
-    pts2 = gen_posterior_points(numpts, dmean, cls.mcmc2.db)
-    acc_numpts = size(pts1,2) + size(pts2,2) # requested != generated
-
-    #Now classify and count up mistakes
-    points = hcat(pts1,pts2)
-    labels = [zeros(Float64,size(pts1,2)), ones(Float64,size(pts2,2))]
-    errs = abs(predict(cls.mcmc1.db, cls.mcmc2.db, points', dmean=dmean) .- labels)
-    return sum(errs)/acc_numpts
-end
-
 function bee_e_mc(cls::OBC.BinaryClassifier; dmean=10.0, numpts=100)
     bee_e_mc(cls, (dmean,dmean), numpts=numpts)
 end
@@ -231,8 +196,8 @@ function bee_e_mc(cls::OBC.BinaryClassifier, dmeans::NTuple{2,Float64}; numpts=1
     pts2 = gen_posterior_points(numpts, dmean2, cls.mcmc2.db)
     acc_numpts = size(pts1,2) + size(pts2,2) # requested != generated
     points = hcat(pts1,pts2)
-    g0 = calc_g(points', cls.mcmc1.db, 20, dmean=dmean1)
-    g1 = calc_g(points', cls.mcmc2.db, 20, dmean=dmean2)
+    g0 = calc_g(points, cls.mcmc1.db, 20, dmean=dmean1)
+    g1 = calc_g(points, cls.mcmc2.db, 20, dmean=dmean2)
     g0 = clamp(g0, -10_000_000.0, Inf)
     g1 = clamp(g1, -10_000_000.0, Inf)
     z = mapslices(logsum, hcat(g0,g1), 2)
@@ -246,110 +211,86 @@ function bee_moments_2sample(cls::OBC.BinaryClassifier, dmeans::NTuple{2,Float64
     #FIXME only c=0.5
     #Generate points from each class
     dmean1,dmean2 = dmeans
-    pts1a = gen_posterior_points(numpts, dmean1, cls.mcmc1.db)
-    pts1b = gen_posterior_points(numpts, dmean1, cls.mcmc1.db)
-    pts2a = gen_posterior_points(numpts, dmean2, cls.mcmc2.db)
-    pts2b = gen_posterior_points(numpts, dmean2, cls.mcmc2.db)
 
-    @assert size(pts1a,2) == size(pts1b,2)
-    @assert size(pts2a,2) == size(pts2b,2)
+    @assert length(cls.mcmc1.db) == length(cls.mcmc2.db)
+    dbsize = length(cls.mcmc1.db)
+    bee = 0.0
+    bee2 = 0.0
+    numpts = div(numpts,2)
+    for i=1:dbsize
 
-    acc_numpts = size(pts1a,2) + size(pts2a,2) # requested != generated
-    pointsa = hcat(pts1a,pts2a)
-    pointsb = hcat(pts1b,pts2b)
-    g1a = calc_g(pointsa', cls.mcmc1.db, 20, dmean=dmean1)
-    g1b = calc_g(pointsb', cls.mcmc1.db, 20, dmean=dmean1)
-    g2a = calc_g(pointsa', cls.mcmc2.db, 20, dmean=dmean2)
-    g2b = calc_g(pointsb', cls.mcmc2.db, 20, dmean=dmean2)
+        #pts1x = gen_points(numpts, dmean1, cls.mcmc1.db[i])
+        #pts1z = gen_points(numpts, dmean1, cls.mcmc1.db[i])
+        #pts2x = gen_points(numpts, dmean2, cls.mcmc2.db[i])
+        #pts2z = gen_points(numpts, dmean2, cls.mcmc2.db[i])
 
-    g1a = clamp(g1a, -10_000_000.0, Inf)
-    g1b = clamp(g1b, -10_000_000.0, Inf)
-    g2a = clamp(g2a, -10_000_000.0, Inf)
-    g2b = clamp(g2b, -10_000_000.0, Inf)
+        #pointsx = hcat(pts1x,pts2x)
+        #pointsz = hcat(pts1z,pts2z)
+        #g1x = calc_g(pointsx, [cls.mcmc1.db[i]], 20, dmean=dmean1)
+        #g1z = calc_g(pointsz, [cls.mcmc1.db[i]], 20, dmean=dmean1)
+        #g2x = calc_g(pointsx, [cls.mcmc2.db[i]], 20, dmean=dmean2)
+        #g2z = calc_g(pointsz, [cls.mcmc2.db[i]], 20, dmean=dmean2)
 
-    #agree = ~((g1a .< g2a) $ (g1b .< g2b))
-    agree(x,y) = ~(x $ y)
-    labela = (g1a .< g2a)
-    labelb = (g1b .< g2b)
+        #g1x = clamp(g1x, -10_000_000.0, Inf)
+        #g1z = clamp(g1z, -10_000_000.0, Inf)
+        #g2x = clamp(g2x, -10_000_000.0, Inf)
+        #g2z = clamp(g2z, -10_000_000.0, Inf)
 
-    za = [logsum(g1a[i],g2a[i]) for i=1:acc_numpts]
-    zb = [logsum(g1b[i],g2b[i]) for i=1:acc_numpts]
+        pts1 = gen_points(numpts*2, dmean1, cls.mcmc1.db[i]) # x and z
+        pts2 = gen_points(numpts*2, dmean2, cls.mcmc2.db[i]) # x and z
 
-    lpyx = min(g1a,g2a) .- za
-    lpyz = min(g1b,g2b) .- zb
+        allpts = hcat(pts1,pts2) 
 
-    ## BEE calculation
-    bee = exp(logsum(vcat(lpyx,lpyz)) - log(acc_numpts*2))
+        g1 = clamp(calc_g(allpts, [cls.mcmc1.db[i]], 20, dmean=dmean1), -10_000_000.0, Inf)
+        g2 = clamp(calc_g(allpts, [cls.mcmc2.db[i]], 20, dmean=dmean2), -10_000_000.0, Inf)
 
-    ## BEE second moment
-    bee2 = -Inf
-    for i=1:acc_numpts, j=1:acc_numpts
-        if agree(labela[i],labelb[j])
-            bee2 = logsum(bee2, lpyx[i] + lpyz[j])
+        g1eff = clamp(calc_g(allpts, cls.mcmc1.db, 20, dmean=dmean1), -10_000_000.0, Inf)
+        g2eff = clamp(calc_g(allpts, cls.mcmc2.db, 20, dmean=dmean2), -10_000_000.0, Inf)
+
+        # Could inline and optimize calc_g here
+        
+        g1x = g1[[1:numpts,numpts*2+1:numpts*3]]
+        g1z = g1[[numpts+1:numpts*2,numpts*3+1:end]]
+        g2x = g2[[1:numpts,numpts*2+1:numpts*3]]
+        g2z = g2[[numpts+1:numpts*2,numpts*3+1:end]]
+
+        g1xeff = g1eff[[1:numpts,numpts*2+1:numpts*3]]
+        g1zeff = g1eff[[numpts+1:numpts*2,numpts*3+1:end]]
+        g2xeff = g2eff[[1:numpts,numpts*2+1:numpts*3]]
+        g2zeff = g2eff[[numpts+1:numpts*2,numpts*3+1:end]]
+
+        #agree = (g1x .< g2x) .== (g1z .< g2z)
+        labelx = (g1xeff .< g2xeff)
+        labelz = (g1zeff .< g2zeff)
+
+        zx = Float64[logsum(g1x[j],g2x[j]) for j=1:numpts*2]
+        zz = Float64[logsum(g1z[j],g2z[j]) for j=1:numpts*2]
+
+        lpyx = min(g1x,g2x) .- zx
+        lpyz = min(g1z,g2z) .- zz
+
+        ## BEE calculation
+        temp = exp(logsum(vcat(lpyx,lpyz)))
+        @show exp(minimum(lpyx))
+        @show exp(minimum(lpyz))
+        #@show temp/numpts/2
+        @show sum(exp(lpyx))/numpts/2
+        @show size(lpyx)
+        @show numpts
+        #@show exp(lpyx[1:3])
+        #@show exp(lpyz[1:3])
+        bee += exp(logsum(vcat(lpyx,lpyz)))
+
+        for j=1:numpts
+            if labelx[j]==labelz[j]
+                bee2 += exp(lpyx[j] + lpyz[j])
+            end
         end
     end
-    bee2 = exp(bee2 - log(acc_numpts))
+    bee /= (numpts*2 * dbsize)
+    bee2 /= (numpts * dbsize) # FIXME not sure about this 2 constant
 
     return bee, bee2, bee2 - bee^2
-end
-
-function bee_e_nsum(cls::OBC.BinaryClassifier, numlam; dmean=10.0, abstol=0.03, maxevals=30)
-    # FIXME This is currently only valid for c=0.5
-    data = vcat(cls.cls1.data, cls.cls2.data)
-    db1,db2 = cls.mcmc1.db, cls.mcmc2.db
-    mins, maxs = get_bbox(data, factor=2)
-    assert(length(db1) == length(db2))
-    global iters = 0
-    global evals = 0
-    function error_1st(data)
-        tabpoints = hcat([x.location for x in data]...)
-        #points: dxn array to evaluate at
-        #vals: 2xn values to store into
-        numpts = length(data)
-        iters += 1
-        evals += numpts
-        g1 = calc_g(tabpoints', db1, numlam, dmean=dmean)
-        g2 = calc_g(tabpoints', db2, numlam, dmean=dmean)
-        # For c != 0.5, we'll need to multiply by c depending on which class is
-        # less
-        errpts = exp(min(g1,g2))
-        for (i,pt) in enumerate(data)
-            resize!(pt.vals, 3)
-            pt.vals[1] = exp(g1[i])
-            pt.vals[2] = exp(g2[i])
-            pt.vals[3] = errpts[i]
-        end
-    end
-    tot1,r = NSum.nsum(3, error_1st, maxs, abstol=abstol, maxevals=maxevals)
-    #println("maxs: $maxs")
-    #println("NSum used $iters iterations, and $evals * numclasses evaluations")
-    tot1[3:end] /= 2 # for c=0.5
-    return tot1, r
-end
-
-function bee_e_cube(data, db1, db2, numlam; dmean=10.0, abstol=0.03, maxevals=0)
-    # FIXME This is only valid for c=0.5
-    # Get the first moments using histories and adaptive integration by
-    # calling Cubature.hquadrature_v with a function that evaluates the error
-    # at multiple points at a time
-    mins, maxs = get_bbox(data, factor=2)
-    assert(length(db1) == length(db2))
-    global iters = 0
-    global evals = 0
-    function error_1st(points, vals)
-        #points: dxn array to evaluate at
-        #vals: 2xn values to store into
-        numpts = size(points, 2)
-        iters += 1
-        evals += numpts
-        g1 = calc_g(points', db1, numlam, dmean=dmean)
-        g2 = calc_g(points', db2, numlam, dmean=dmean)
-        vals[:] = exp(min(g1,g2))
-    end
-    val, err = hcubature_v(error_1st, mins, maxs, abstol=abstol, maxevals=maxevals)
-    println("maxs: $maxs, mins: $mins")
-    println("Cubature used $iters iterations, and $evals * numclasses evaluations")
-    return val*0.5, err
 end
 
 function predict(db0, db1, points; dmean=10.0)

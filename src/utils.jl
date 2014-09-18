@@ -93,7 +93,8 @@ function gen_grid(mins, maxs, N=30)
     D = length(mins)
     stepsizes = ceil(float(maxs .- mins) ./N)
     ranges = [mins[i]:stepsizes[i]:maxs[i] for i=1:D]
-    grid = hcat(map(collect, product(ranges...))...)'
+    @show ranges
+    grid = hcat(map(collect, product(ranges...))...)
     return map(length,ranges), stepsizes, grid
 end
 

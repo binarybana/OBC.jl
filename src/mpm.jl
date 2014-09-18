@@ -6,14 +6,14 @@ import Distributions: sample
 using OBC
 using Cubature
 using Iterators
-using NSum
-import OBC: energy, propose!, save!, reject!
-include("utils.jl")
-include("mpmcls.jl")
+#using NSum
+import OBC: energy, propose!, save!, reject!, logsum, gelman_rubin, get_bbox, gen_grid, gen_unit_grid
 
 export MPMPrior, MPMParams, MPMSampler, calc_g, gen_points, 
     gen_posterior_points, calc_pvals, error_points, predict, error_moments_cube, 
-    var_error_hists, e_error_hists, e_error_eff
+    var_error_hists, e_error_hists, e_error_eff, mpm_classifier
+
+include("mpmcls.jl")
 
 ######################################################################
 ######################################################################
@@ -137,9 +137,6 @@ function propose!(obj::MPMSampler, block::Int, sigma::Float64)
     nothing
 end
 
-import Base.sum
-sum(x::Float64) = x
-
 function energy(obj::MPMSampler, block::Int=0) #block currently unused
     accum = 0.0
     #likelihoods
@@ -166,10 +163,8 @@ reject!(obj::MPMSampler) = copy!(obj.curr, obj.old)
 save!(obj::MPMSampler) = copy!(obj.old, obj.curr)
 
 function gen_points(n, dmean, pt)
-    local temp2, tempmv
     D = size(pt.lam,1)
     newpts = Array(Float64,D,n)
-    # FIXME assuming single mixture
     for i=1:n
         tempmv = rand(MultivariateNormal(pt.mu, pt.sigma))
         for j=1:D
@@ -234,14 +229,14 @@ end
 function calc_g(points, db, numlam; dmean=10.0)
     # Note: dmean here could actually be d if we knew valid values of d for
     # each point we are calculating the effective density for
-    numpts = size(points, 1)
-    dims = size(points, 2)
+    numpts = size(points, 2)
+    dims = size(points, 1)
     dblen = length(db)
     res = zeros(numpts)
     lams = Array(Float64, dims, numlam)
     llams = Array(Float64, dims, numlam)
     rlams = Array(Float64, dims, numlam)
-    points = floor(points)'
+    points = floor(points)
     lgpoints = lgamma(points .+ 1)
     for i in 1:dblen # each draw of theta
         curr = db[i]

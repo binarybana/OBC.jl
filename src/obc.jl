@@ -1,6 +1,7 @@
 module OBC
 
 using Distributions
+using Iterators
 
 export
     Sampler, 
@@ -12,7 +13,10 @@ export
     #reject, 
     plot_all, 
     plot_trace, 
-    logsum
+    logsum,
+    get_bbox,
+    gen_grid
+
     #set_energy_limits,
 
 abstract Sampler
