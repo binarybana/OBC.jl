@@ -2,28 +2,18 @@ module OBC
 
 using Distributions
 using Iterators
+using SAMC
 
 export
-    Sampler, 
-    MHRecord, 
-    AMWGRecord, 
-    sample, 
-    #propose, 
-    #energy, 
-    #reject, 
     plot_all, 
     plot_trace, 
     logsum,
     get_bbox,
-    gen_grid
-
-    #set_energy_limits,
-
-abstract Sampler
-abstract MCMC
-
-include("mh.jl")
-include("amwg.jl")
+    gen_grid,
+    gelman_rubin, 
+    get_bbox, 
+    gen_grid, 
+    gen_unit_grid
 
 type BinaryClassifier{T<:Sampler,S<:MCMC}
     cls1 :: T

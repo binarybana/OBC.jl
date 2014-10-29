@@ -60,17 +60,17 @@ function logsum(x::Float64, y::Float64)
 end
 
 function get_bbox(data; factor=1.5, positive=true)
-    D = size(data,2)
+    @show D = size(data,2)
 
     #maxs = vec(maximum(data, 1))
-    maxs = vec(mapslices(x->quantile(x,0.75), data, 1))
+    maxs = vec(mapslices(x->quantile(x,0.75), data, 2))
     maxs .+= 3*maximum(maxs) / 4
 
     if positive
         mins = zeros(D)
     else
         #mins = vec(minimum(data,1))
-        maxs = vec(mapslices(x->quantile(x,0.25), data, 1))
+        maxs = vec(mapslices(x->quantile(x,0.25), data, 2))
     end
 
     spreads = maxs .- mins
@@ -93,8 +93,7 @@ function gen_grid(mins, maxs, N=30)
     D = length(mins)
     stepsizes = ceil(float(maxs .- mins) ./N)
     ranges = [mins[i]:stepsizes[i]:maxs[i] for i=1:D]
-    @show ranges
     grid = hcat(map(collect, product(ranges...))...)
-    return map(length,ranges), stepsizes, grid
+    return ranges, grid
 end
 

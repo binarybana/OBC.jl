@@ -1,5 +1,4 @@
 reload("OBC.jl")
-#using PyPlot
 using Distributions
 
 #srand(1)
@@ -59,8 +58,7 @@ function gen_data(mu, cov, n)
     lams, ps
 end
 
-function gen_data_jason(mu)
-    D = num_feat
+function gen_data_jason(mu, D)
     lmu = zeros(D) .+ mu 
     cov = eye(D)*0.5
     cov[1,2] = -0.1
@@ -75,7 +73,7 @@ D = num_feat
 ######################################################################
 # Class 0
 ######################################################################
-trumu, trucov, dataa, tst_dataa,lam1,lam2 = gen_data_jason(0.0)
+trumu, trucov, dataa, tst_dataa,lam1,lam2 = gen_data_jason(0.0,D)
 #tst_data = rand(510,D) .* 500 .+ 8
 #tst_data[:,1] = 0
 ##tst_data[:,1] = rand(0:1, 510)
@@ -85,28 +83,39 @@ trumu, trucov, dataa, tst_dataa,lam1,lam2 = gen_data_jason(0.0)
 ######################################################################
 # Class 1
 ######################################################################
-trumub, trucovb, datab, tst_datab,_,_ = gen_data_jason(-1.0)
+trumub, trucovb, datab, tst_datab,_,_ = gen_data_jason(-0.0,D)
 #tst_datab = rand(510,D) .* 500 .+ 8
 #tst_datab[:,1] = 2
 ##tst_datab[:,1] = rand(0:1, 510)
 #datab = tst_datab[1:10,:]
 
 #d=100.0
-d1 = ones(Ntrn)*100.0 .+ randn(Ntrn)*10
-d2 = ones(Ntrn)*100.0 .+ randn(Ntrn)*10
-dataa .*= d1 ./ 100.0
-datab .*= d2 ./ 100.0
-dmean1,dmean2 = mean(d1),mean(d2)
-dmean = mean([dmean1,dmean2])
+#d1 = ones(Ntrn)*100.0 .+ randn(Ntrn)*10
+#d2 = ones(Ntrn)*100.0 .+ randn(Ntrn)*10
+#dataa = iround(dataa .* d1 ./ 100.0)
+#datab = iround(datab .* d2 ./ 100.0)
+#dmean1,dmean2 = mean(d1),mean(d2)
+#dmean = mean([dmean1,dmean2])
+d1 = d2 = dmean1 = dmean2 = 100.0
+dataa = datab
 
-cls = MPM.mpm_classifier(dataa, datab, burn=1000, thin=50, d1=d1, d2=d2, kappa=50.0, usepriors=true)
-@time MPM.sample(cls, 10000)#, verbose=true)
-@show bemc = MPM.bee_e_mc(cls, (dmean1,dmean2),numpts=50)
-@show bemc = MPM.bee_e_mc(cls, (dmean1,dmean2),numpts=50)
-@show beem1,beem2 = MPM.bee_moments(cls, (dmean1,dmean2))
-@show beem1,beem2 = MPM.bee_moments(cls, (dmean1,dmean2))
-@show MPM.bee_moments_2sample(cls, (dmean1,dmean2),numpts=50)
-@show MPM.bee_moments_2sample(cls, (dmean1,dmean2),numpts=50)
+cls = MPM.mpm_classifier(dataa, datab, burn=1000, thin=50, d1=d1, d2=d2, kappa=float(D+1), usepriors=true)
+tsample = @elapsed MPM.sample(cls, 3000)#, verbose=true)
+
+@show bemc = MPM.bee_e_mc(cls, (dmean1,dmean2),numpts=1000)
+#@show bee2s = MPM.bee_moments_2sample(cls, (dmean1,dmean2),numpts=50)
+#@show beem1,beem2 = MPM.bee_moments(cls, (dmean1,dmean2),numpts=20)
+
+
+#Profile.clear()
+#@profile bemc = MPM.bee_e_mc(cls, (dmean1,dmean2),numpts=50)
+#Profile.print()
+
+#@show bemc = MPM.bee_e_mc(cls, (dmean1,dmean2),numpts=50)
+#@show beem1,beem2 = MPM.bee_moments(cls, (dmean1,dmean2))
+#@show beem1,beem2 = MPM.bee_moments(cls, (dmean1,dmean2))
+#@show MPM.bee_moments_2sample(cls, (dmean1,dmean2),numpts=10)
+#@show MPM.bee_moments_2sample(cls, (dmean1,dmean2),numpts=10)
 
 #function project!(obj::MPM.MPMParams, sel)
     #obj.mu = obj.mu[sel]
