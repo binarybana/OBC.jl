@@ -25,11 +25,11 @@ function mpm_classifier(data1, data2; burn=1000, thin=50, d1=100.0, d2=100.0, ka
     OBC.BinaryClassifier(obj_a, obj_b, mymh_a, mymh_b)
 end
 
-function sample(cls::OBC.BinaryClassifier, iters=10000; verbose=false)
+function sample!(cls::OBC.BinaryClassifier, iters=10000; verbose=false)
     t0 = time()
-    OBC.sample(cls.mcmc1, iters, verbose=verbose)
+    OBC.sample!(cls.mcmc1, iters, verbose=verbose)
     t1 = time()
-    OBC.sample(cls.mcmc2, iters, verbose=verbose)
+    OBC.sample!(cls.mcmc2, iters, verbose=verbose)
     t2 = time()
     return t1-t0, t2-t1
 end
@@ -173,8 +173,6 @@ function bee_e_mc(cls::OBC.BinaryClassifier, dmeans::NTuple{2,Float64}; numpts=1
     g1 = clamp(g1, -10_000_000.0, Inf)
     z = mapslices(logsum, hcat(g0,g1), 2)
     res = exp(logsum(min(g0,g1) .- z .- log(acc_numpts)))
-    @show exp(min(g0,g1) .- z )
-    @show exp(min(g0,g1) .- z ) |> extrema
     return res
 end
 

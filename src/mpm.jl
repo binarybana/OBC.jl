@@ -3,11 +3,11 @@ module MPM
 using Distributions
 using OBC
 using SAMC
-import SAMC: energy, propose!, save!, reject!
+import SAMC: energy, propose!, save!, reject!, record
 
 export MPMPrior, MPMParams, MPMSampler, calc_g, gen_points, 
     gen_posterior_points, calc_pvals, error_points, predict, error_moments_cube, 
-    var_error_hists, e_error_hists, e_error_eff, mpm_classifier, sample
+    var_error_hists, e_error_hists, e_error_eff, mpm_classifier, sample!
 
 include("mpmcls.jl")
 
@@ -149,11 +149,13 @@ function energy(obj::MPMSampler, block::Int=0) #block currently unused
         accum -= logpdf(InverseWishart(obj.prior.kappa, obj.prior.S), obj.curr.sigma)
         # mu
         accum -= sum(logpdf(
-            DiagNormal(obj.prior.mu, obj.prior.mu_sigmas), obj.curr.mu))
+            MvNormal(obj.prior.mu, obj.prior.mu_sigmas), obj.curr.mu))
     end
     obj.curr.energy = accum
     return accum
 end
+
+record(obj::MPMSampler) = deepcopy(obj.curr)
     
 reject!(obj::MPMSampler) = copy!(obj.curr, obj.old)
 save!(obj::MPMSampler) = copy!(obj.old, obj.curr)

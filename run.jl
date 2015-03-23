@@ -23,12 +23,12 @@ function setv(p,s,d,conv=None)
     end
 end
 
-iters = setv(params, "iters", int(3e3), int)
-num_feat = setv(params, "num_feat", 2, int)
+iters = setv(params, "iters", int(2e4), int)
+num_feat = setv(params, "num_feat", 5, int)
 rseed = setv(params, "rseed", rand(Uint), int)
 #seed = setv(params, "seed", 1234, int)
 seed = setv(params, "seed", rand(Uint), int)
-Ntrn = setv(params, "Ntrn", 10, int)
+Ntrn = setv(params, "Ntrn", 70, int)
 Ntst = setv(params, "Ntst", 500, int)
 f_glob = setv(params, "f_glob", 1, int)
 subclasses = setv(params, "subclasses", 2, int)
@@ -58,11 +58,14 @@ function gen_data(mu, cov, n)
     lams, ps
 end
 
+const kappa = 80
 function gen_data_jason(mu, D)
     lmu = zeros(D) .+ mu 
-    cov = eye(D)*0.5
-    cov[1,2] = -0.1
-    cov[2,1] = -0.1
+
+    cov = rand(InverseWishart(kappa,eye(D)*(kappa-D-1)))
+    #cov = eye(D)*0.5
+    #cov[1,2] = -0.1
+    #cov[2,1] = -0.1
     lam1, trn_data = gen_data(lmu, cov, Ntrn)
     lam2, tst_data = gen_data(lmu, cov, Ntst)
     return lmu, cov, trn_data', tst_data', lam1, lam2
@@ -100,9 +103,9 @@ d1 = d2 = dmean1 = dmean2 = 100.0
 dataa = datab
 
 cls = MPM.mpm_classifier(dataa, datab, burn=1000, thin=50, d1=d1, d2=d2, kappa=float(D+1), usepriors=true)
-tsample = @elapsed MPM.sample(cls, 3000)#, verbose=true)
+@time MPM.sample!(cls, 5000)#, verbose=true)
 
-@show bemc = MPM.bee_e_mc(cls, (dmean1,dmean2),numpts=1000)
+#@show bemc = MPM.bee_e_mc(cls, (dmean1,dmean2),numpts=1000)
 #@show bee2s = MPM.bee_moments_2sample(cls, (dmean1,dmean2),numpts=50)
 #@show beem1,beem2 = MPM.bee_moments(cls, (dmean1,dmean2),numpts=20)
 
