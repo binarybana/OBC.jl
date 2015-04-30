@@ -28,7 +28,7 @@ function MPMPrior(;D=2, args...)
     kappa = 6.0
     p = MPMPrior(D, zeros(D), ones(D)*30, kappa, (kappa-1-D)*eye(D,D))
     for (sym, val) in args
-        if sym in MPMPrior.names
+        if sym in names(MPMPrior)
             setfield!(p, sym, val)
         else
             error("Quantity $sym not recognized in MPMPrior constructor")
