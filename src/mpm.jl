@@ -28,7 +28,7 @@ function MPMPrior(;D=2, args...)
     kappa = 6.0
     p = MPMPrior(D, zeros(D), ones(D)*30, kappa, (kappa-1-D)*eye(D,D))
     for (sym, val) in args
-        if sym in names(MPMPrior)
+        if sym in fieldnames(MPMPrior)
             setfield!(p, sym, val)
         else
             error("Quantity $sym not recognized in MPMPrior constructor")
@@ -87,7 +87,7 @@ function MPMSampler(prior::MPMPrior, data::Matrix, obj::MPMParams, d::Vector{Flo
     if !(eltype(data) <: Integer)
         warn("Data is being truncated from type $(eltype(data)) to Int, dataloss might occur")
     end
-    MPMSampler(deepcopy(obj), deepcopy(obj), prior, int(data), true, d)
+    MPMSampler(deepcopy(obj), deepcopy(obj), prior, round(Int, data), true, d)
 end
 
 const blocks = 3
@@ -120,7 +120,7 @@ function propose!(obj::MPMSampler, block::Int, sigma::Float64)
     elseif block == 3
         # Modify lambdas
         for i in 1:length(curr.lam) 
-            if randbool()
+            if rand(Bool)
                 curr.lam[i] += randn() * sigma*0.1
             end
         end

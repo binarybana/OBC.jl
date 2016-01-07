@@ -9,25 +9,26 @@ blas_set_num_threads(1)
     #params = yaml.load(os.environ['PARAM'])
 #else:
     #params = {}
-params = (ASCIIString=>Any)[]
+params = Dict{ASCIIString,Any}()
 
-function setv(p,s,d,conv=None)
-    if !(s in p)
+function setv(p,s,d,conv=null)
+    if !(s in keys(p))
     #if !contains(p,s)
         p[s] = d # Possible error TODO str(d)
         return d
-    elseif conv != None
+    elseif conv != null
         return conv(p[s])
     else
         return p[s]
     end
 end
 
-iters = setv(params, "iters", int(2e4), int)
+int = x -> round(Int, x)
+iters = setv(params, "iters", round(Int, 2e4), int)
 num_feat = setv(params, "num_feat", 5, int)
-rseed = setv(params, "rseed", rand(Uint), int)
+rseed = setv(params, "rseed", rand(UInt), int)
 #seed = setv(params, "seed", 1234, int)
-seed = setv(params, "seed", rand(Uint), int)
+seed = setv(params, "seed", rand(UInt), int)
 Ntrn = setv(params, "Ntrn", 70, int)
 Ntst = setv(params, "Ntst", 500, int)
 f_glob = setv(params, "f_glob", 1, int)
